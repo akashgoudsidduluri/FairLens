@@ -1,0 +1,71 @@
+# FairLens India - pre-registered configuration
+# IMPORTANT: audit thresholds, planted effect sizes, and approval threshold are
+# fixed here BEFORE the first audit run. They must not be tuned after seeing
+# audit results. See expected_findings.md and DECISIONS.md.
+
+project: FairLens India
+seed: 42
+
+api:
+  host: 127.0.0.1
+  port: 8000
+  base_url: http://127.0.0.1:8000
+  timeout_seconds: 20
+  batch_size: 500
+  retries: 3
+
+data:
+  synthetic_only: true
+  n_observational: 4000
+
+audit:
+  alpha: 0.05
+  correction: holm
+  min_pairs: 1000
+  materiality: 0.02
+  n_pairs: 2000
+  min_cell_size: 200
+  intersectional_pairs_per_cell: 500
+  matched_n_pairs: 1000
+  income_bands: 5
+  seeds: [1, 2, 3, 4, 5]
+  bootstrap_iterations: 4000
+  ci_level: 0.95
+
+models:
+  approval_threshold: 500.0
+  # Base score (models 1-6). Coefficients are data-generating choices, not
+  # audit thresholds; they are fixed before the first audit.
+  base_intercept: 300.0
+  base_income_weight: 120.0
+  base_credit_weight: 180.0
+  base_employment_weight: 80.0
+  base_burden_weight: 60.0
+  income_floor: 250000.0
+  income_ceiling: 5000000.0
+  # Planted penalties (fixed up front)
+  penalty_gender: 120.0
+  penalty_pincode: 120.0
+  penalty_name: 120.0
+  penalty_intersectional: 240.0
+  # Model 6: per-request noise, deterministically seeded from request+seed
+  noise_sd: 70.0
+  noise_seed: 6
+  # Model 7: income-only score
+  income_only_intercept: 500.0
+  income_only_slope: 160.0
+  income_only_log_scale: 0.6
+  income_only_reference_income: 600000.0
+
+mitigation:
+  offset_min: 0
+  offset_max: 240
+  offset_step: 20
+  max_accuracy_loss_default: 0.02
+  n_samples: 6000
+
+certificate:
+  db_path: data/certificates.db
+
+report:
+  max_words: 250

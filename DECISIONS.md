@@ -65,3 +65,23 @@ implementation fixes but must not tune those values.
   runs on every narrative and a deterministic template is the fallback.
 - Rejected candidates remain in the report. No threshold, penalty, or model is
   changed after seeing audit output.
+
+## D-008 (Phase 1) Demo port 8010
+- Port 8000 was already occupied by an unrelated local service on the build
+  machine, so the sandbox and dashboard defaults use 8010. This is an
+  operational choice, not an audit parameter. `run.sh`, `run.ps1`, the UI
+  default, and `config.yaml` agree.
+
+## D-009 (Phase 2) Model 5 expectation miss — reported, not retuned
+- First audit (seed 42) found the Model 5 hotspot at net flip 0.632 (kept), as
+  expected. It also kept the single-attribute gender finding at net 0.0265,
+  above the 0.02 materiality threshold, whereas `expected_findings.md` predicted
+  ~0.012 and "immaterial".
+- Cause: the pre-registration arithmetic multiplied the hotspot's 2% share of
+  the whole population by the 50% female share, but the single-attribute probe
+  samples male originals only. Among male-origin pairs, 4% are in the hotspot,
+  so the expected diluted rate is 0.04 × 0.63 ≈ 0.025, not 0.012. The
+  prediction was wrong, not the threshold.
+- No threshold, penalty, population mix, or model was changed after seeing this.
+  The miss is carried into Phase 6 and the final checklist. The hotspot remains
+  the dominant finding (0.632 vs 0.0265).

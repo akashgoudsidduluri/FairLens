@@ -6,7 +6,7 @@ PY=./.venv/Scripts/python.exe
 if [ ! -f "$PY" ]; then PY=./.venv/bin/python; fi
 if [ -f .env ]; then set -a; . ./.env; set +a; fi
 
-$PY -m uvicorn sandbox.api:app --host 127.0.0.1 --port 8000 &
+$PY -m uvicorn sandbox.api:app --host 127.0.0.1 --port 8010 &
 API_PID=$!
 trap 'kill $API_PID 2>/dev/null || true' EXIT
 sleep 2

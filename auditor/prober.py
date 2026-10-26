@@ -466,6 +466,11 @@ class Prober:
     def check_health_sync(self) -> dict[str, Any]:
         return self._run(self.check_health())
 
+    def score_many_sync(
+        self, model_id: int, applicants: list[Applicant]
+    ) -> list[ModelResponse]:
+        return self._run(self._score_many(model_id, applicants))
+
     def sample_observational_sync(
         self, model_id: int, n: int, seed: int
     ) -> tuple[list[Applicant], list[ModelResponse]]:

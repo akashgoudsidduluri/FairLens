@@ -85,3 +85,24 @@ implementation fixes but must not tune those values.
 - No threshold, penalty, population mix, or model was changed after seeing this.
   The miss is carried into Phase 6 and the final checklist. The hotspot remains
   the dominant finding (0.632 vs 0.0265).
+
+## D-010 (Phase 3) Mitigation curve
+- Group-wise offset is added to the returned score only for the affected
+  segment; the configured approval threshold is re-applied. Fairness gap is the
+  absolute difference between segment and comparison approval rates, so
+  over-correction is visible (the gap rises again past the optimum).
+- Accuracy is agreement with the generator's hidden true_repay on the mitigation
+  sample. Recommended point = smallest gap among offsets with accuracy loss
+  within the user's budget; ties go to the smaller offset.
+- Rare intersectional segments use a stratified sample (1,000 segment + up to
+  2,000 natural comparison applicants) so the slider is measurable. The curve
+  records that sampling mode.
+
+## D-011 (Phase 3) Certificate trust boundary
+- Hash rule is exactly `sha256(prev_hash + canonical_json(payload))`, with a
+  64-zero genesis hash. Verification also checks index order, prev-hash links,
+  payload hashes, and that the duplicated `created_at` column matches the
+  payload timestamp.
+- A hash chain detects modification and reordering, not authorship: an attacker
+  who can rewrite every row can recompute the chain. Signing (e.g. Ed25519) is
+  future work. The UI states this limitation next to the verify result.

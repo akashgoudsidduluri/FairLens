@@ -292,7 +292,7 @@ def make_intersectional_findings(
     iterations: int = 4000,
     level: float = 0.95,
     alpha: float = 0.05,
-    top_k: int = 5,
+    top_k: int | None = 5,
 ) -> list[Finding]:
     """Holm-correct all 12 tested cells and return the top ``top_k`` by net flip.
 
@@ -351,4 +351,4 @@ def make_intersectional_findings(
         )
 
     findings.sort(key=lambda f: f.evidence.net_flip_rate, reverse=True)
-    return findings[:top_k]
+    return findings if top_k is None else findings[:top_k]

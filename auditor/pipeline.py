@@ -193,14 +193,15 @@ def run_audit(
         }
         for c in cell_probes
     ]
-    inter = make_intersectional_findings(
+    all_inter = make_intersectional_findings(
         cells_payload,
         obs_cells,
         iterations=iterations,
         level=level,
         alpha=alpha,
-        top_k=5,
+        top_k=None,
     )
+    inter = all_inter[:5]
     for finding in inter:
         yield _event(
             "statistician",
@@ -324,6 +325,19 @@ def run_audit(
             "targets": {k: {"target": v[0], "comparison": v[1]} for k, v in targets.items()},
             "gaps": gaps,
             "n_observational": len(obs_applicants),
+            "intersectional_cells": [
+                {
+                    "target_gender": f.target_group.split("|")[0],
+                    "age_band": f.target_group.split("|")[1],
+                    "urban_rural": f.target_group.split("|")[2],
+                    "n": f.evidence.n,
+                    "b": f.evidence.b,
+                    "c": f.evidence.c,
+                    "net_flip_rate": f.evidence.net_flip_rate,
+                    "p_adjusted": f.evidence.p_adjusted,
+                }
+                for f in all_inter
+            ],
         },
     )
 

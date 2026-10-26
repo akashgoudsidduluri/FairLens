@@ -106,3 +106,15 @@ implementation fixes but must not tune those values.
 - A hash chain detects modification and reordering, not authorship: an attacker
   who can rewrite every row can recompute the chain. Signing (e.g. Ed25519) is
   future work. The UI states this limitation next to the verify result.
+
+## D-012 (Phase 4) Narrative verification and UI sign-off
+- The reporter receives computed JSON only; the payload excludes model
+  coefficients and planted penalties. Every narrative number is normalised and
+  checked against that JSON. A failed LLM draft is retried once, then replaced
+  by a deterministic template that passes the same check.
+- Streamlit sign-off requires a non-empty approver name. The certificate tab
+  shows chain verification and a clearly labelled tamper demo. Notices are
+  stored in session state across the rerun so the tamper result is visible.
+- The sandbox process is launched through `sandbox.serve`; the auditor package
+  never contains the scoring API's import path.
+

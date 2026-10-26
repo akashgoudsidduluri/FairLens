@@ -30,8 +30,7 @@ def start_api(port: int) -> subprocess.Popen:
         [
             sys.executable,
             "-m",
-            "uvicorn",
-            "sandbox.api:app",
+            "sandbox.serve",
             "--host",
             "127.0.0.1",
             "--port",

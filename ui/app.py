@@ -254,7 +254,10 @@ with st.sidebar:
     st.header("Audit controls")
     api_url = st.text_input("Sandbox API URL", value=CONFIG["api"]["base_url"])
     model_id = st.selectbox(
-        "Model under audit", options=list(range(1, 8)), format_func=lambda n: f"Model {n}"
+        "Model under audit",
+        options=list(range(1, 8)),
+        index=1,
+        format_func=lambda n: f"Model {n}",
     )
     st.markdown(
         '<div class="fl-note">Demo order: <b>Model 2 → Model 7 → Model 5</b>. '

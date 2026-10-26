@@ -177,7 +177,8 @@ class Prober:
                     await asyncio.sleep(0.25 * (2**attempt))
         raise ProberError(
             f"Sandbox is unreachable at {self.api_url}. Start the sandbox API "
-            f"(see README) and try again. Details: {last_error}"
+            f"(see README) and try again. Details: "
+            f"{type(last_error).__name__}: {last_error}"
         )
 
     # --------------------------------------------------------------- sampling

@@ -118,3 +118,17 @@ implementation fixes but must not tune those values.
 - The sandbox process is launched through `sandbox.serve`; the auditor package
   never contains the scoring API's import path.
 
+## D-013 (Phase 5) Demo path and headless smoke test
+- The dashboard starts on Model 2 and names the demo path Model 2 -> Model 7 ->
+  Model 5: a clear gender penalty, a confounded model that must be rejected,
+  then the intersectional hotspot.
+- `run.sh` and `run.ps1` start the sandbox entry point, wait for `/health`, and
+  clean up both processes on exit. Ports can be overridden with
+  `FAIRLENS_API_PORT` / `FAIRLENS_UI_PORT`.
+- `eval/demo_smoke.py` is the headless end-to-end check. It uses a real sandbox
+  process and HTTP, asserts each audit is under 60 seconds, verifies the
+  certificate/tamper flow, and verifies graceful failure on an unreachable API.
+  The total three-model walkthrough was 58.3s in the recorded headless run;
+  individual audits were 23.3s, 15.0s, and 20.0s.
+- SQLite connections are explicitly closed after use, because Windows keeps a
+  lock on the certificate file until the connection is closed.

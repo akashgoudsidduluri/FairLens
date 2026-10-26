@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -43,10 +44,22 @@ def _resolve(db_path: str | Path) -> Path:
     return repo_path(db_path)
 
 
+@contextmanager
+def _connection(path: Path):
+    """Commit/rollback and always close, including on Windows file locks."""
+
+    conn = sqlite3.connect(path)
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
+
+
 def init_db(db_path: str | Path) -> Path:
     path = _resolve(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(path) as conn:
+    with _connection(path) as conn:
         conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {TABLE} (
@@ -102,7 +115,7 @@ def issue(
     payload_text = canonical_json(cert_payload)
 
     path = init_db(db_path)
-    with sqlite3.connect(path) as conn:
+    with _connection(path) as conn:
         row = conn.execute(
             f"SELECT idx, record_hash FROM {TABLE} ORDER BY idx DESC LIMIT 1"
         ).fetchone()
@@ -128,7 +141,7 @@ def list_records(db_path: str | Path) -> list[Certificate]:
     path = _resolve(db_path)
     if not path.exists():
         return []
-    with sqlite3.connect(path) as conn:
+    with _connection(path) as conn:
         try:
             rows = conn.execute(
                 f"SELECT idx, prev_hash, record_hash, payload, created_at "
@@ -156,7 +169,7 @@ def verify(db_path: str | Path) -> tuple[bool, int | None]:
     path = _resolve(db_path)
     if not path.exists():
         return True, None
-    with sqlite3.connect(path) as conn:
+    with _connection(path) as conn:
         try:
             rows = conn.execute(
                 f"SELECT idx, prev_hash, record_hash, payload, created_at "
@@ -198,7 +211,7 @@ def tamper_for_demo(
     path = _resolve(db_path)
     if not path.exists():
         raise ValueError("certificate database does not exist")
-    with sqlite3.connect(path) as conn:
+    with _connection(path) as conn:
         row = conn.execute(
             f"SELECT idx, prev_hash, record_hash, payload, created_at FROM {TABLE} WHERE idx = ?",
             (index,),

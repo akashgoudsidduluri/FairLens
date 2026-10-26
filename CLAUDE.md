@@ -36,9 +36,11 @@ test suite.
 ## Commands
 ```
 .venv\Scripts\python -m pytest -q
-.venv\Scripts\python -m uvicorn sandbox.api:app --port 8000
-.venv\Scripts\streamlit run ui/app.py
+.venv\Scripts\python -m sandbox.serve --port 8010
+.venv\Scripts\streamlit run ui/app.py --server.port 8501
 ```
+
+Or start both with `.\run.ps1` (Windows) / `./run.sh` (Git Bash).
 
 ## Current phase state
 See `expected_findings.md` (frozen) and `DECISIONS.md` (append-only).

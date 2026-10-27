@@ -80,16 +80,69 @@ the loss budget, breaking ties toward the smaller offset.
 `check_numbers(text, payload) -> dict` with `passed`, `unknown`, `checked`.
 
 ## `ui/app.py`
-Single Streamlit page: sidebar API/model/audit; live agent log; findings table;
-subgroup heatmap with table fallback; impact panel; mitigation slider; report
-with number-check badge; approver approve/reject; certificate verify/tamper tab.
+Single Streamlit page with two tabs, **Audit** and **Certificates**.
+
+- Header: model picker, sandbox URL, **Start Audit**, **Demo mode** (Models
+  2 → 7 → 5).
+- Audit tab: pipeline strip, live agent log, findings board, intersectional
+  heatmap (table fallback), impact panel, mitigation slider in `@st.fragment`,
+  number-checked narrative, approver name + Approve/Reject.
+- Certificates tab: chain view, **Verify chain**, labelled tamper demo behind an
+  explicit confirmation, reset-demo-database.
+- The completed `AuditReport` and all notices live in `st.session_state` so a
+  rerun (slider, button, tab switch) does not lose the report.
+- Buttons use `on_click` callbacks; Approve/Reject/Verify/Tamper never rely on
+  the return value of the button call itself.
+- Empty, loading, and error states are explicit; an unreachable sandbox shows an
+  error card, not a traceback.
+- No audit and no certificate are distinct states: the certificate tab shows
+  `NOT CHECKED / 0 records`, never a vacuous `CHAIN VERIFIED`.
+
+## `ui/components.py`
+Pure renderers that return HTML strings and never touch Streamlit state:
+
+- `pipeline_strip(stages)` — plan/probe/test/challenge/translate/sign.
+- `log_feed(events)` — newest first, colour-coded by `AgentEvent.kind`; Skeptic
+  rejections are red.
+- `finding_card(finding, verdict)` — evidence, CI, checks, `REJECTED` stamp.
+- `impact_counter(estimate)` — per-10,000 value with a JS count-up.
+- `chain_view(records, broken_index)` — genesis, hashes, first broken row.
+- `verify_badge(state)` — `CHAIN VERIFIED`, `CHAIN BROKEN`, or `NOT CHECKED`.
+
+## `ui/plotting.py`
+One Plotly template (transparent background, accent `#5EEAD4`, Inter, no
+modebar through `PLOTLY_CONFIG`). `heatmap_figure` uses a fixed 0–100 pp colour
+context so cells are comparable across models. `mitigation_figure` puts fairness
+gap and accuracy change on **one** percentage-point axis; a dual axis would make
+the two series look falsely comparable.
+
+## `ui/style.css` and `.streamlit/config.toml`
+Dark theme, one accent colour, Inter for UI and JetBrains Mono for logs/hashes.
+CSS is injected once per run. It hides Streamlit chrome, defines the card system,
+and provides the pulse, stamp-slam, and glow animations. Button label colour is
+forced through nested Streamlit nodes so primary text stays legible.
 
 ## `eval/run_eval.py`
-Runs 7 models × 5 seeds, writes `eval/results/results.csv` and
+Runs 7 models × 5 seeds, writes `eval/results/results.csv`,
+`materiality_sensitivity.csv`, `mitigation_curves.csv`, chart PNGs, and
 `eval/results/summary.md`, including false alarms before/after Skeptic, misses,
 runtime, mitigation, certificate test, number-check pass rate, and materiality
 sensitivity (1% / 3%). Does not alter config.yaml.
 
 ## `eval/fairlearn_baseline.py`
 Demographic parity difference and equalized odds difference on the same
-observational sample; writes `eval/results/fairlearn.md`.
+observational sample; writes `eval/results/fairlearn.md` and `.csv`.
+
+## `eval/charts.py`
+Pillow chart helpers (grouped bar, simple bar, line). Matplotlib's native
+`ft2font` DLL is blocked on the build machine, so evaluation artifacts do not
+depend on it.
+
+## `eval/sandbox_runner.py`
+`start_servers(count)` / `stop_servers(processes)`: launches real
+`sandbox.serve` processes on free ports for evaluation and waits for `/health`.
+
+## `eval/demo_smoke.py`
+Headless end-to-end check: real sandbox, Models 2/7/5, 60-second budget per
+audit, certificate/tamper flow, graceful failure on an unreachable API. Writes
+`eval/results/phase5_demo_smoke.md`.

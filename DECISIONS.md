@@ -129,6 +129,49 @@ implementation fixes but must not tune those values.
   process and HTTP, asserts each audit is under 60 seconds, verifies the
   certificate/tamper flow, and verifies graceful failure on an unreachable API.
   The total three-model walkthrough was 58.3s in the recorded headless run;
-  individual audits were 23.3s, 15.0s, and 20.0s.
+  individual audits were 23.3s, 15.0s, and 20.0s. A Phase 6 rerun measured
+  67.9s (27.7s, 17.5s, 22.6s); both runs keep every audit under the 60s budget.
+  The reported numbers are measurements, not targets.
 - SQLite connections are explicitly closed after use, because Windows keeps a
   lock on the certificate file until the connection is closed.
+
+## D-014 (Phase 5b) Dashboard presentation rules
+- Streamlit is pinned to 1.66.1 so the custom CSS and component behaviour are
+  reproducible. `ui/style.css` is injected once; components are pure HTML
+  renderers with no Streamlit calls, so they are testable without a browser.
+- The live log renders newest first. Streamlit re-renders the placeholder on
+  every event, which resets an auto-scrolled container to the top; newest-first
+  keeps the latest line visible without JavaScript scroll hacks.
+- The mitigation chart puts the fairness gap and the accuracy change on a single
+  percentage-point axis. A second y-axis makes the two series look comparable
+  while hiding different scales, so the second axis was removed.
+- The heatmap uses a fixed 0–100 pp colour context rather than per-model
+  normalisation; per-model scaling would make a 5 pp cell look as red as a 60 pp
+  cell. Empty cells render `—`, and the age labels get explicit left margin.
+- After approval the report stays in `st.session_state`; the slider reruns a
+  fragment, not the audit. A certificate tab with no records shows
+  `NOT CHECKED / 0 records` instead of a vacuous `CHAIN VERIFIED`.
+- Layout was checked at 1366×768 and 1920×1080 with a headless Chrome CDP
+  capture; `document.documentElement.scrollWidth` equals the viewport width at
+  both sizes. Only hidden Plotly SVG artifacts sit outside the viewport.
+
+## D-015 (Phase 6) Evaluation and reporting rules
+- The main run is 7 models × seeds 1–5 at the frozen 2% materiality. The
+  sensitivity run repeats the 70 audits at 1% and 3% using in-memory copies of the
+  config; `config.yaml` is never edited by the harness.
+- Mitigation is fixed at seed 42. The first harness version looked for a seed-42
+  row in the main results, which only contains seeds 1–5, so every model was
+  silently skipped. The harness now runs its own seed-42 audit per model before
+  sweeping offsets. This is a reporting bug fix, not a threshold change.
+- Only the five intersectional cells with the largest net flip are carried into
+  the findings board; all 12 cells are tested and Holm-corrected. This is a
+  readability cap, not a filter on significance, and it is listed as a limitation
+  because Model 2 has six affected female cells and reports five.
+- Runtimes in `results.csv` are measured inside three parallel workers. Three
+  Model 7 seeds recorded 665–672 s while sharing the sandbox with other audits and
+  returned identical results to the 29–32 s seeds. The outliers stay in the
+  artifact with `runtime_under_60 = False`; the serial demo is the latency
+  benchmark.
+- Evaluation charts use Pillow (`eval/charts.py`) because Matplotlib's native
+  font DLL is blocked on the build machine.
+

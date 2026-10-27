@@ -157,14 +157,15 @@ def test_ui_renders_initial_state(app_test):
     at, db_path = app_test
     assert at.tabs
     assert any("No audit yet" in markdown.value for markdown in at.markdown)
-    assert any("No certificates yet" in info.value for info in at.info)
+    assert any("No certificates yet" in markdown.value for markdown in at.markdown)
+    assert any("NOT CHECKED" in markdown.value for markdown in at.markdown)
     assert verify(db_path) == (True, None)
 
 
 def test_ui_full_audit_and_human_approval_flow(app_test):
     at, db_path = app_test
     at.selectbox[0].select(2)
-    _click(at, "Run audit")
+    _click(at, "Start Audit")
     at.run()
 
     assert not at.exception, [exc.value for exc in at.exception]
@@ -196,6 +197,38 @@ def test_ui_full_audit_and_human_approval_flow(app_test):
     _click(at, "Verify chain")
     at.run()
     assert any("Chain verified" in msg.value for msg in at.success)
+
+
+def test_ui_demo_mode_runs_the_three_models(app_test):
+    at, _ = app_test
+    _click(at, "Demo mode")
+    at.run()
+
+    assert not at.exception, [exc.value for exc in at.exception]
+    assert not at.error, [err.value for err in at.error]
+    html = " ".join(markdown.value for markdown in at.markdown)
+    assert "Demo run" in html
+    assert "Model 2" in html and "Model 7" in html and "Model 5" in html
+    assert "Audit of Model 5" in html
+    assert len([select for select in at.selectbox if select.label == "Inspect a demo result"]) == 1
+
+
+def test_ui_reject_logs_decision_without_approval(app_test):
+    at, db_path = app_test
+    _click(at, "Start Audit")
+    at.run()
+    next(t for t in at.text_input if t.label == "Approver name").set_value(
+        "Dr Test Auditor"
+    )
+    _click(at, "Reject & log decision")
+    at.run()
+
+    assert not at.exception, [exc.value for exc in at.exception]
+    assert any("Rejection logged as certificate #0" in msg.value for msg in at.warning)
+    records = list_records(db_path)
+    assert len(records) == 1
+    assert records[0].payload["decision"] == "reject"
+    assert verify(db_path) == (True, None)
 
 
 def test_ui_certificate_tamper_is_detected(app_test):

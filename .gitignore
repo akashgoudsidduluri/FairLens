@@ -4,6 +4,3 @@ __pycache__/
 .pytest_cache/
 .env
 data/*.db
-eval/results/*.png
-eval/results/*.csv
-.streamlit/

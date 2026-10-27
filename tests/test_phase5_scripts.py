@@ -35,7 +35,7 @@ def test_ui_shows_friendly_error_when_api_is_unreachable(monkeypatch, tmp_path):
     monkeypatch.setattr("auditor.pipeline.run_audit", unreachable)
     at = AppTest.from_file(str(ROOT / "ui" / "app.py"), default_timeout=60)
     at.run()
-    next(button for button in at.button if button.label == "Run audit").click()
+    next(button for button in at.button if button.label == "Start Audit").click()
     at.run()
 
     assert not at.exception, [exc.value for exc in at.exception]

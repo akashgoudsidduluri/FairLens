@@ -47,6 +47,7 @@ def test_mitigation_chart_keeps_both_series_on_one_axis():
     assert list(fig.data[0].y) == [35.0, 4.6, 30.0]
     assert list(fig.data[1].y) == [-1.5, -1.3, -0.2]
     assert fig.layout.yaxis.title.text == "Percentage points (pp)"
+    assert fig.layout.xaxis.dtick == 80
     assert any(getattr(shape, "xref", "") == "x" for shape in fig.layout.shapes)
 
 

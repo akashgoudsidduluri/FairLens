@@ -190,6 +190,7 @@ def mitigation_figure(
     offsets = [int(point["offset"]) for point in curve]
     gaps = [float(point["fairness_gap"]) * 100.0 for point in curve]
     losses = [float(point["accuracy_loss"]) * 100.0 for point in curve]
+    offset_step = offsets[1] - offsets[0] if len(offsets) > 1 else 20
 
     fig = go.Figure()
     fig.add_trace(
@@ -238,7 +239,7 @@ def mitigation_figure(
         height=380,
         xaxis=dict(
             title=dict(text="Score offset for affected group", standoff=10),
-            dtick=max(1, (max(offsets) - min(offsets)) // 8),
+            dtick=offset_step,
         ),
         yaxis=dict(title=dict(text="Percentage points (pp)", standoff=6)),
         legend=dict(

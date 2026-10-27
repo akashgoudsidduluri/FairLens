@@ -5,11 +5,11 @@ The test is functional; it does not retune any pre-registered threshold.
 
 | Model | Kept | Runtime | Narrative | Number check | Functional | Notes |
 |---|---|---|---|---|---|---|
-| 2 | 6 | 23.3s | template | PASS | PASS | none |
-| 7 | 0 | 15.0s | template | PASS | PASS | none |
-| 5 | 2 | 20.0s | template | PASS | PASS | KNOWN PRE-REGISTRATION MISS: single-attribute gender was also kept (net 0.0265). Reported, not retuned; see DECISIONS.md D-009.; expected single gender immaterial; observed kept (D-009 miss) |
+| 2 | 6 | 27.7s | template | PASS | PASS | none |
+| 7 | 0 | 17.5s | template | PASS | PASS | none |
+| 5 | 2 | 22.6s | template | PASS | PASS | KNOWN PRE-REGISTRATION MISS: single-attribute gender was also kept (net 0.0265). Reported, not retuned; see DECISIONS.md D-009.; expected single gender immaterial; observed kept (D-009 miss) |
 
-Total audit time: **58.3s**. Every individual audit is under the 60-second demo budget.
+Total audit time: **67.9s**. Every individual audit is under the 60-second demo budget.
 
 ## Human gate and certificate
 
@@ -21,7 +21,7 @@ Total audit time: **58.3s**. Every individual audit is under the 60-second demo 
 ## Unreachable API
 
 - Planner emitted an aborted event: True
-- Error surfaced cleanly: `ProberError: Sandbox is unreachable at http://127.0.0.1:1. Start the sandbox API (see README) and try again. Details: `
+- Error surfaced cleanly: `ProberError: Sandbox is unreachable at http://127.0.0.1:1. Start the sandbox API (see README) and try again. Details: ConnectTimeout: `
 
 ## Known miss
 

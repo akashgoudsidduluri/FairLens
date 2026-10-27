@@ -371,7 +371,7 @@ def _tamper() -> None:
 def _reset_demo_db() -> None:
     fresh_demo_db(DB_PATH)
     st.session_state.last_cert = None
-    st.session_state.verify_state = {"ok": True, "broken": None}
+    st.session_state.verify_state = None
     _set_notice(
         "cert_notice",
         "success",
@@ -1021,16 +1021,27 @@ with certificate_tab:
     )
     _render_notice(st.session_state.cert_notice)
     records = list_records(DB_PATH)
-    chain_ok, broken = verify(DB_PATH)
-    chain_label = (
-        f"{len(records)} record{'s' if len(records) != 1 else ''} · first broken: "
-        f"{broken if broken is not None else 'none'}"
-        if records
-        else "0 records · nothing to verify"
-    )
+    verify_state = st.session_state.get("verify_state") or None
+    if not records:
+        chain_label = "0 records · nothing to verify"
+        badge_state = None
+        broken = None
+    elif verify_state is None:
+        chain_label = (
+            f"{len(records)} record{'s' if len(records) != 1 else ''} · press Verify chain"
+        )
+        badge_state = None
+        broken = None
+    else:
+        broken = verify_state.get("broken")
+        chain_label = (
+            f"{len(records)} record{'s' if len(records) != 1 else ''} · first broken: "
+            f"{broken if broken is not None else 'none'}"
+        )
+        badge_state = verify_state.get("ok")
     st.markdown(
         '<div class="fl-verify-row">'
-        + ui_components.verify_badge(chain_ok if records else None)
+        + ui_components.verify_badge(badge_state)
         + f'<span class="fl-caption">{chain_label}</span>'
         + "</div>",
         unsafe_allow_html=True,

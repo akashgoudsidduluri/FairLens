@@ -193,10 +193,12 @@ def test_ui_full_audit_and_human_approval_flow(app_test):
     assert records[0].payload["decision"] == "approve"
     assert records[0].payload["approver"] == "Dr Test Auditor"
     assert verify(db_path) == (True, None)
+    assert "NOT CHECKED" in " ".join(markdown.value for markdown in at.markdown)
 
     _click(at, "Verify chain")
     at.run()
     assert any("Chain verified" in msg.value for msg in at.success)
+    assert "CHAIN VERIFIED" in " ".join(markdown.value for markdown in at.markdown)
 
 
 def test_ui_demo_mode_runs_the_three_models(app_test):

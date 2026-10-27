@@ -204,3 +204,33 @@ implementation fixes but must not tune those values.
   (`For ...`). It can no longer drop the rejected/immaterial disclosure or the
   limitations paragraph. The reported intersectional-cell count no longer has an
   `or 12` fallback that could contradict a measured value.
+
+## D-017 (v2 R1) Audit service, streaming, and generated types
+- `run_audit` is a synchronous generator that calls `asyncio.run` internally, so
+  background jobs use a bounded `ThreadPoolExecutor` (`service.max_workers`)
+  rather than adding a second async boundary. The HTTP layer stays async and
+  hands blocking store calls to `asyncio.to_thread`.
+- Persistence sits behind `api.storage.AuditStore`. `SQLiteAuditStore` is the
+  reference implementation (WAL, 5 s busy timeout). Postgres is a documented
+  extension point: implement the same methods and return it from `create_store`;
+  no route or job imports SQLite directly.
+- SSE readers poll the store instead of consuming an in-process queue. This is
+  slightly more work per stream but is correct across worker threads and future
+  multi-process deployments, and it lets a client reconnect with `Last-Event-ID`.
+- `ProbeEvent` is a new lightweight contract, one per twin pair: applicant
+  summaries, changed field, both decisions, and running b/c/n with a normal-
+  approximation CI. The final report still uses the seeded percentile bootstrap;
+  the running interval is explicitly labelled `normal_approximation` and exists
+  only to keep the live stream informative.
+- Probe events are delivered in batches of `api.probe_event_batch_size` (25) and
+  written in one transaction per batch. This keeps the SSE stream smooth without
+  opening a database round-trip per pair.
+- SSE frames use `id:`, `event:`, and a JSON `data:` body shaped as
+  `{seq, kind, data}`; terminal frames use `event: done`.
+- `web/src/api-types.ts` is generated from `app.openapi()` by
+  `python -m api.generate_types`. A test fails if the checked-in file is stale.
+  The stream response advertises `StreamEvent` so `AgentEvent` and `ProbeEvent`
+  appear in the component schemas.
+- v1 audit semantics are unchanged: no thresholds, pair counts, penalties, or
+  existing tests were modified. `service` and `probe_event_batch_size` are
+  operational settings only.

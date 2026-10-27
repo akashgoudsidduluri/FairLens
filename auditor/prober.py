@@ -16,25 +16,28 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 import httpx
 import numpy as np
 
+from auditor.statistician import running_net_flip_ci
 from sandbox.generator import (
     generate_applicants,
     generate_segment,
     income_band_boundaries,
     make_twin,
 )
-from schemas import AgentEvent, Applicant, ModelResponse
+from schemas import AgentEvent, Applicant, ModelResponse, ProbeEvent
 
 ATTR_LABELS = {
     "gender": "gender",
     "pincode_group": "pincode group",
     "name_group": "name group",
 }
+
+PairEventSink = Callable[[list[ProbeEvent]], None]
 
 
 class ProberError(RuntimeError):
@@ -65,7 +68,12 @@ class CellProbe:
 
 
 class Prober:
-    def __init__(self, api_url: str, config: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        api_url: str,
+        config: dict[str, Any],
+        pair_event_sink: PairEventSink | None = None,
+    ) -> None:
         url = (api_url or "").strip().rstrip("/")
         if not url:
             raise ProberError("API URL is empty")
@@ -79,6 +87,10 @@ class Prober:
         self.batch_size = int(config["api"]["batch_size"])
         self.timeout = float(config["api"]["timeout_seconds"])
         self.retries = int(config["api"]["retries"])
+        self.pair_event_sink = pair_event_sink
+        self.pair_event_batch_size = max(
+            1, int(config.get("api", {}).get("probe_event_batch_size", 25))
+        )
         self.events: list[AgentEvent] = []
 
     # ------------------------------------------------------------------ events
@@ -255,6 +267,75 @@ class Prober:
         c = sum(1 for o, t in zip(originals, twins) if not o.approved and t.approved)
         return b, c
 
+    # ---------------------------------------------------------- probe events
+    @staticmethod
+    def _summary(applicant: Applicant) -> dict[str, Any]:
+        return {
+            "id": applicant.id,
+            "gender": applicant.gender,
+            "age_band": applicant.age_band,
+            "urban_rural": applicant.urban_rural,
+            "pincode_group": applicant.pincode_group,
+            "name_group": applicant.name_group,
+            "income": applicant.income,
+        }
+
+    def _emit_pair_events(
+        self,
+        *,
+        probe_id: str,
+        phase: str,
+        changed_field: str,
+        originals: list[Applicant],
+        twins: list[Applicant],
+        original_responses: list[ModelResponse],
+        twin_responses: list[ModelResponse],
+    ) -> None:
+        """Emit one lightweight event per pair, in sink-sized batches.
+
+        The running b/c counts restart at each probe (single attribute, cell, or
+        matched re-test). The interval is the cheap normal approximation in
+        ``running_net_flip_ci``; the final report still uses the bootstrap.
+        """
+
+        if self.pair_event_sink is None:
+            return
+        level = float(self.config["audit"]["ci_level"])
+        batch: list[ProbeEvent] = []
+        b = c = 0
+        for index, (original, twin, o_resp, t_resp) in enumerate(
+            zip(originals, twins, original_responses, twin_responses)
+        ):
+            if o_resp.approved and not t_resp.approved:
+                b += 1
+            elif not o_resp.approved and t_resp.approved:
+                c += 1
+            n = index + 1
+            low, high = running_net_flip_ci(b, c, n, level)
+            batch.append(
+                ProbeEvent(
+                    probe_id=probe_id,
+                    phase=phase,  # type: ignore[arg-type]
+                    pair_index=index,
+                    changed_field=changed_field,
+                    original=self._summary(original),
+                    twin=self._summary(twin),
+                    original_approved=bool(o_resp.approved),
+                    twin_approved=bool(t_resp.approved),
+                    b_running=b,
+                    c_running=c,
+                    n_running=n,
+                    net_flip_rate_running=(b - c) / n,
+                    ci_low_running=low,
+                    ci_high_running=high,
+                )
+            )
+            if len(batch) >= self.pair_event_batch_size:
+                self.pair_event_sink(batch)
+                batch = []
+        if batch:
+            self.pair_event_sink(batch)
+
     # ----------------------------------------------------------- public probes
     async def sample_observational(
         self, model_id: int, n: int, seed: int
@@ -286,6 +367,15 @@ class Prober:
         originals, twins = self._build_pairs(originals, attribute, target_group, seed)
         o_resp, t_resp = await self._paired_score(model_id, originals, twins)
         b, c = self._counts(o_resp, t_resp)
+        self._emit_pair_events(
+            probe_id=f"single-{attribute}-{target_group}",
+            phase="single_attribute",
+            changed_field=attribute,
+            originals=originals,
+            twins=twins,
+            original_responses=o_resp,
+            twin_responses=t_resp,
+        )
         net = (b - c) / n
         self._emit(
             "prober",
@@ -355,6 +445,15 @@ class Prober:
         o_resp, t_resp = await self._paired_score(model_id, all_originals, all_twins)
         for start, end, g, other, age, urban in cell_slices:
             b, c = self._counts(o_resp[start:end], t_resp[start:end])
+            self._emit_pair_events(
+                probe_id=f"{g}|{age}|{urban}",
+                phase="intersectional",
+                changed_field="gender",
+                originals=all_originals[start:end],
+                twins=all_twins[start:end],
+                original_responses=o_resp[start:end],
+                twin_responses=t_resp[start:end],
+            )
             cells.append(
                 CellProbe(
                     target_gender=g,
@@ -418,6 +517,15 @@ class Prober:
         originals, twins = self._build_pairs(originals, attribute, target_group, seed + 5)
         o_resp, t_resp = await self._paired_score(model_id, originals, twins)
         b, c = self._counts(o_resp, t_resp)
+        self._emit_pair_events(
+            probe_id=f"matched-{attribute}-{target_group}",
+            phase="matched_retest",
+            changed_field=attribute,
+            originals=originals,
+            twins=twins,
+            original_responses=o_resp,
+            twin_responses=t_resp,
+        )
 
         boundaries = income_band_boundaries(
             [a.income for a in originals], int(self.config["audit"]["income_bands"])

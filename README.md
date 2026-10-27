@@ -76,6 +76,58 @@ The sandbox exposes only `GET /health`, `POST /score`, and `POST /score_batch`.
 It never reveals which model has a planted penalty. The auditor imports only
 `schemas.py` and `sandbox.generator`; a static test enforces the boundary.
 
+## Audit service (v2)
+
+The v2 service runs audits as background jobs over HTTP, streams live progress
+as Server-Sent Events, persists every audit and event in SQLite behind a
+swappable store interface, and gates certificate issuance behind a named human
+decision.
+
+```powershell
+# terminal 1: the black-box sandbox
+.\.venv\Scripts\python -m sandbox.serve --host 127.0.0.1 --port 8010
+
+# terminal 2: the audit service (defaults to 127.0.0.1:8020)
+.\.venv\Scripts\python -m api.serve
+```
+
+Then, in a third terminal:
+
+```powershell
+# start an audit
+$body = '{"model_id": 2, "include_mitigation": false, "include_narrative": false}'
+$audit = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8020/audits `
+  -ContentType 'application/json' -Body $body
+
+# stream agent + per-pair probe events (SSE)
+curl.exe -N "http://127.0.0.1:8020/audits/$($audit.id)/events"
+
+# fetch the report, then sign off and issue a certificate
+Invoke-RestMethod "http://127.0.0.1:8020/audits/$($audit.id)"
+$decision = '{"approver": "Asha Auditor", "decision": "approve"}'
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8020/audits/$($audit.id)/decision" `
+  -ContentType 'application/json' -Body $decision
+
+Invoke-RestMethod http://127.0.0.1:8020/certificates
+Invoke-RestMethod -Method Post http://127.0.0.1:8020/certificates/verify
+```
+
+Operational settings live under `service:` in `config.yaml` (host, port,
+`audit_db`, `max_workers`, `sse_poll_seconds`). Override the listener with
+`FAIRLENS_SERVICE_HOST` / `FAIRLENS_SERVICE_PORT`. `POST /audits` returns `202`
+with `id`, `events_url`, and `result_url`; SSE frames use the event names
+`agent`, `probe`, and `done`, with `data:` shaped as `{seq, kind, data}` and an
+`id:` equal to the monotonic sequence.
+
+Regenerate the TypeScript client types after changing `api/schemas.py`:
+
+```powershell
+.\.venv\Scripts\python -m api.generate_types
+```
+
+This writes `web/src/api-types.ts`; `tests/test_v2_types.py` fails if the file is
+stale.
+
 ## Tests
 
 ```powershell
@@ -141,8 +193,10 @@ the Model 5 miss, are in [DECISIONS.md](DECISIONS.md).
 | `report/` | Number checker, LLM reporter, template fallback |
 | `trust/` | Certificate payload, SQLite hash chain, verification, tamper demo |
 | `ui/` | Streamlit app, pure HTML components, Plotly theme, CSS |
+| `api/` | v2 FastAPI audit service, SQLite store, SSE stream, TS type generation |
+| `web/src/api-types.ts` | TypeScript types generated from the OpenAPI schema |
 | `eval/` | Full evaluation, Fairlearn baseline, charts, headless demo smoke |
-| `tests/` | pytest suite, including black-box boundary checks |
+| `tests/` | pytest suite, including black-box boundary and v2 API/SSE tests |
 
 ## Honest limitations
 

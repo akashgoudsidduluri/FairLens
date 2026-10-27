@@ -148,3 +148,61 @@ depend on it.
 Headless end-to-end check: real sandbox, Models 2/7/5, 60-second budget per
 audit, certificate/tamper flow, graceful failure on an unreachable API. Writes
 `eval/results/phase5_demo_smoke.md`.
+
+## `schemas.py` addition (v2)
+`ProbeEvent`: one counterfactual twin pair observed during probing.
+Fields: `probe_id`, `phase` (`single_attribute` | `intersectional` |
+`matched_retest`), `pair_index`, `changed_field`, applicant summaries
+`original`/`twin`, both `*_approved` decisions, running `b_running`/`c_running`/
+`n_running`, `net_flip_rate_running`, `ci_low_running`/`ci_high_running`,
+`ci_method` (default `normal_approximation`), `timestamp`. The running interval
+is the normal approximation in `auditor.statistician.running_net_flip_ci`; the
+final `Evidence` CI remains the seeded bootstrap.
+
+## `auditor/statistician.py` addition (v2)
+`running_net_flip_ci(b, c, n, level) -> (low, high)`: normal-approximation CI
+for the running paired net flip rate. `Var(X) = (b+c)/n - ((b-c)/n)^2`,
+`SE = sqrt(Var(X)/n)`, interval `net ± z*SE`, clipped to `[-1, 1]`. Cheap enough
+to compute per pair; not used for final findings.
+
+## `auditor/prober.py` (v2)
+`Prober(..., pair_event_sink=None)`. When a sink is supplied, each probe emits
+one `ProbeEvent` per pair and delivers them in batches of
+`api.probe_event_batch_size`. `probe_attribute`, `probe_intersectional`, and
+`probe_matched` all emit; running counts restart at each probe. Defaults are
+unchanged when the sink is `None`.
+
+## `auditor/pipeline.py` (v2)
+`run_audit(..., probe_event_sink=None)` forwards the sink to `Prober`. Existing
+call signatures and audit output are unchanged when the sink is omitted.
+
+## `api/` (v2)
+- `api.app.create_app(*, config=None, store=None, audit_fn=run_audit) -> FastAPI`.
+  Dependency injection keeps route tests fast and avoids real sandbox runs.
+- `api.storage.AuditStore` protocol + `SQLiteAuditStore`; `create_store(config)`
+  is the Postgres swap point. Tables: `audits`, `audit_events`.
+- `api.jobs.AuditJobManager`: `ThreadPoolExecutor`, persists agent/probe events,
+  completes or fails the audit record.
+- `api.schemas`: request/response and `StreamEvent` contracts.
+- `api.generate_types.render_types(openapi) -> str`; `python -m api.generate_types`
+  writes `web/src/api-types.ts`.
+- `python -m api.serve` runs the service on `service.host:service.port` (8020),
+  overridable with `FAIRLENS_SERVICE_HOST` / `FAIRLENS_SERVICE_PORT`.
+
+Endpoints:
+
+| Method | Path | Behaviour |
+|---|---|---|
+| GET | `/health` | `{status: "ok", service, version}` |
+| POST | `/audits` | Validate, persist `queued`, submit background job, return `202` with `id`, `events_url`, `result_url` |
+| GET | `/audits/{id}` | Status/record; includes `result`, `event_count`, `last_seq`, `decision` |
+| GET | `/audits/{id}/events` | SSE: `agent`, `probe`, `done`; `id:` is the monotonic sequence; `data:` is `{seq, kind, data}` |
+| POST | `/audits/{id}/decision` | Named approver + approve/reject; `409` unless completed and undecided; issues certificate |
+| GET | `/certificates` | `{records, count}` |
+| POST | `/certificates/verify` | `{verified, first_broken, records}` |
+| POST | `/certificates/tamper-demo` | Requires `confirm: true`; corrupts one record and returns before/after + verification |
+
+## `web/src/api-types.ts` (v2)
+Generated from `app.openapi()`. Contains `AgentEvent`, `ProbeEvent`,
+`StreamEvent`, all request/response models, and `AuditReport`. Regenerate with
+`python -m api.generate_types`; `tests/test_v2_types.py` fails if stale.

@@ -123,6 +123,33 @@ class AgentEvent(Contract):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class ProbeEvent(Contract):
+    """One counterfactual twin pair observed during probing.
+
+    This is deliberately lighter than ``TwinPair``: it keeps applicant
+    summaries rather than full applicants, and the running statistics use a
+    normal approximation. The final finding CI remains the seeded bootstrap in
+    ``auditor.statistician``.
+    """
+
+    probe_id: str
+    phase: Literal["single_attribute", "intersectional", "matched_retest"]
+    pair_index: int = Field(ge=0)
+    changed_field: str
+    original: dict[str, Any]
+    twin: dict[str, Any]
+    original_approved: bool
+    twin_approved: bool
+    b_running: int = Field(ge=0)
+    c_running: int = Field(ge=0)
+    n_running: int = Field(ge=0)
+    net_flip_rate_running: float = Field(ge=-1, le=1)
+    ci_low_running: float = Field(ge=-1, le=1)
+    ci_high_running: float = Field(ge=-1, le=1)
+    ci_method: str = "normal_approximation"
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class ImpactEstimate(Contract):
     finding_id: str
     subgroup: str

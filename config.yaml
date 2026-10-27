@@ -13,6 +13,8 @@ api:
   timeout_seconds: 20
   batch_size: 500
   retries: 3
+  # Pair-level probe events are delivered to the API in batches of this size.
+  probe_event_batch_size: 25
 
 data:
   synthetic_only: true
@@ -67,6 +69,14 @@ mitigation:
 
 certificate:
   db_path: data/certificates.db
+
+# Audit API service (v2). Operational settings only; no audit thresholds.
+service:
+  host: 127.0.0.1
+  port: 8020
+  audit_db: data/audits.db
+  max_workers: 2
+  sse_poll_seconds: 0.1
 
 report:
   max_words: 250

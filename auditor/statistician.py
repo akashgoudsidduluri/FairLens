@@ -155,6 +155,31 @@ def paired_evidence(
     )
 
 
+def running_net_flip_ci(
+    b: int, c: int, n: int, level: float = 0.95
+) -> tuple[float, float]:
+    """Normal-approximation CI for the running paired net flip rate.
+
+    Let X_i = +1 for a harm flip, -1 for a benefit flip, and 0 otherwise. Then
+    E[X] = (b-c)/n and Var(X) = (b+c)/n - ((b-c)/n)^2, so
+
+        SE = sqrt(Var(X) / n)
+
+    and the interval is net +/- z * SE. This is intentionally cheap enough to
+    compute after every pair. Final findings still use the seeded bootstrap;
+    this running interval is only for the live probe stream.
+    """
+
+    if n <= 0:
+        return 0.0, 0.0
+    if b < 0 or c < 0 or b + c > n:
+        raise ValueError("require 0 <= b, 0 <= c, and b+c <= n")
+    net = (b - c) / n
+    variance = max(0.0, (b + c) / n - net * net)
+    half = _z_for_level(level) * math.sqrt(variance / n)
+    return max(-1.0, net - half), min(1.0, net + half)
+
+
 def holm_adjust(pvalues: Iterable[float]) -> list[float]:
     """Holm step-down adjusted p-values, returned in the original order."""
 

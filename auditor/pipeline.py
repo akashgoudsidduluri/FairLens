@@ -10,7 +10,7 @@ client and the applicant generator only.
 
 from __future__ import annotations
 
-from typing import Any, Generator
+from typing import Any, Callable, Generator
 
 from auditor.prober import CellProbe, Prober, ProbeResult
 from auditor.skeptic import review
@@ -25,7 +25,7 @@ from auditor.statistician import (
     paired_evidence,
 )
 from impact.impact import impact_per_10k
-from schemas import AgentEvent, AuditReport, Evidence, Finding
+from schemas import AgentEvent, AuditReport, Evidence, Finding, ProbeEvent
 
 ATTRIBUTES = ("gender", "pincode_group", "name_group")
 ATTRIBUTE_LABELS = {
@@ -63,6 +63,7 @@ def run_audit(
     *,
     include_mitigation: bool = True,
     include_narrative: bool = True,
+    probe_event_sink: Callable[[list[ProbeEvent]], None] | None = None,
 ) -> Generator[AgentEvent, None, AuditReport]:
     seed = int(config.get("seed", 42) if seed is None else seed)
     cfg = config["audit"]
@@ -73,7 +74,7 @@ def run_audit(
     iterations = int(cfg["bootstrap_iterations"])
     level = float(cfg["ci_level"])
 
-    prober = Prober(api_url, config)
+    prober = Prober(api_url, config, pair_event_sink=probe_event_sink)
     yield _event(
         "planner",
         f"Audit plan: {model_id} | observational sample {config['data']['n_observational']} | "

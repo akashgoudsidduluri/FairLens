@@ -1,0 +1,50 @@
+# Shared validation adapter for the synthetic sandbox bank.
+# The seven model-*.yaml files inherit this file and only change the model
+# query parameter. This maps the canonical Applicant to the sandbox's
+# POST /score_batch body and maps [{approved, score}] back to ModelResponse.
+name: sandbox
+description: Synthetic sandbox bank validation adapter
+base_url: "${FAIRLENS_API_URL:-http://127.0.0.1:8010}"
+
+health:
+  path: /health
+
+request:
+  method: POST
+  path: /score_batch
+  headers:
+    Content-Type: application/json
+    Accept: application/json
+  query:
+    model: 1
+  applicant_map:
+    id: "${applicant.id}"
+    income: "${applicant.income}"
+    loan_amount: "${applicant.loan_amount}"
+    credit_score: "${applicant.credit_score}"
+    employment_years: "${applicant.employment_years}"
+    age: "${applicant.age}"
+    gender: "${applicant.gender}"
+    pincode: "${applicant.pincode}"
+    name: "${applicant.name}"
+    pincode_group: "${applicant.pincode_group}"
+    name_group: "${applicant.name_group}"
+    urban_rural: "${applicant.urban_rural}"
+    age_band: "${applicant.age_band}"
+  body: "${applicants}"
+
+response:
+  items: "$"
+  approved: "approved"
+  score: "score"
+
+limits:
+  # Hard cap on applicants sent to this target in one audit. 0 disables the cap.
+  probe_cap: 100000
+  rate_limit_per_second: 50
+  max_retries: 3
+  backoff_seconds: 0.25
+  timeout_seconds: 20
+
+auth:
+  type: none

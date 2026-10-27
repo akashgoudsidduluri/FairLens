@@ -48,6 +48,8 @@ class AuditJobManager:
         seed: int,
         include_mitigation: bool,
         include_narrative: bool,
+        sequential: bool,
+        target: Any = None,
     ) -> None:
         self._executor.submit(
             self._run,
@@ -57,6 +59,8 @@ class AuditJobManager:
             seed,
             include_mitigation,
             include_narrative,
+            sequential,
+            target,
         )
 
     def _run(
@@ -67,6 +71,8 @@ class AuditJobManager:
         seed: int,
         include_mitigation: bool,
         include_narrative: bool,
+        sequential: bool,
+        target: Any,
     ) -> None:
         try:
             self.store.mark_running(audit_id)
@@ -89,6 +95,8 @@ class AuditJobManager:
                 include_mitigation=include_mitigation,
                 include_narrative=include_narrative,
                 probe_event_sink=sink,
+                target=target,
+                sequential=sequential,
             )
             report: AuditReport | None = None
             while True:

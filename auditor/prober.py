@@ -22,7 +22,12 @@ from urllib.parse import urlparse
 import httpx
 import numpy as np
 
-from auditor.statistician import running_net_flip_ci
+from auditor.statistician import (
+    SEQ_MATERIAL_HARM,
+    SEQ_NO_MATERIAL_HARM,
+    running_net_flip_ci,
+    sequential_stopping_decision,
+)
 from sandbox.generator import (
     generate_applicants,
     generate_segment,
@@ -30,6 +35,7 @@ from sandbox.generator import (
     make_twin,
 )
 from schemas import AgentEvent, Applicant, ModelResponse, ProbeEvent
+from targets.base import TargetAdapter, TargetError
 
 ATTR_LABELS = {
     "gender": "gender",
@@ -54,6 +60,9 @@ class ProbeResult:
     c: int
     seed: int
     bands: list[dict[str, Any]] = field(default_factory=list)
+    requested_n: int | None = None
+    stopped_early: bool = False
+    stop_reason: str | None = None
 
 
 @dataclass
@@ -73,6 +82,8 @@ class Prober:
         api_url: str,
         config: dict[str, Any],
         pair_event_sink: PairEventSink | None = None,
+        target: TargetAdapter | None = None,
+        sequential: bool | None = None,
     ) -> None:
         url = (api_url or "").strip().rstrip("/")
         if not url:
@@ -91,6 +102,11 @@ class Prober:
         self.pair_event_batch_size = max(
             1, int(config.get("api", {}).get("probe_event_batch_size", 25))
         )
+        self.target = target
+        self.sequential = sequential
+        if target is not None:
+            self.api_url = str(getattr(target, "base_url", self.api_url)).rstrip("/")
+            target.reset()
         self.events: list[AgentEvent] = []
 
     # ------------------------------------------------------------------ events
@@ -152,6 +168,16 @@ class Prober:
             applicants[i : i + self.batch_size]
             for i in range(0, len(applicants), self.batch_size)
         ]
+        if self.target is not None:
+            # Adapters own rate limiting and the per-audit probe cap. Call them
+            # sequentially so those controls see one request at a time.
+            flat: list[ModelResponse] = []
+            try:
+                for chunk in chunks:
+                    flat.extend(await self.target.score_batch(chunk))
+            except TargetError as exc:
+                raise ProberError(str(exc)) from exc
+            return flat
         semaphore = asyncio.Semaphore(4)
         async with httpx.AsyncClient(timeout=self.timeout) as client:
 
@@ -166,6 +192,22 @@ class Prober:
         return flat
 
     async def check_health(self) -> dict[str, Any]:
+        if self.target is not None:
+            try:
+                data = await self.target.health()
+            except Exception as exc:  # noqa: BLE001
+                raise ProberError(
+                    f"Target {self.target.name!r} is unreachable at "
+                    f"{self.api_url}. Details: {type(exc).__name__}: {exc}"
+                ) from exc
+            if data.get("status") != "ok":
+                raise ProberError(f"Target health check failed: {data}")
+            self._emit(
+                "prober",
+                f"Target {self.target.name} reachable at {self.api_url}",
+                {"api_url": self.api_url, "target": self.target.name},
+            )
+            return data
         last_error: Exception | None = None
         for attempt in range(self.retries + 1):
             try:
@@ -290,22 +332,28 @@ class Prober:
         twins: list[Applicant],
         original_responses: list[ModelResponse],
         twin_responses: list[ModelResponse],
+        start_b: int = 0,
+        start_c: int = 0,
+        pair_offset: int = 0,
     ) -> None:
         """Emit one lightweight event per pair, in sink-sized batches.
 
         The running b/c counts restart at each probe (single attribute, cell, or
         matched re-test). The interval is the cheap normal approximation in
         ``running_net_flip_ci``; the final report still uses the bootstrap.
+        Sequential probes pass ``start_b``/``start_c``/``pair_offset`` so a new
+        chunk continues the same running stream.
         """
 
         if self.pair_event_sink is None:
             return
         level = float(self.config["audit"]["ci_level"])
         batch: list[ProbeEvent] = []
-        b = c = 0
-        for index, (original, twin, o_resp, t_resp) in enumerate(
+        b, c = start_b, start_c
+        for local_index, (original, twin, o_resp, t_resp) in enumerate(
             zip(originals, twins, original_responses, twin_responses)
         ):
+            index = pair_offset + local_index
             if o_resp.approved and not t_resp.approved:
                 b += 1
             elif not o_resp.approved and t_resp.approved:
@@ -350,6 +398,99 @@ class Prober:
         )
         return applicants, responses
 
+    async def _probe_attribute_sequential(
+        self,
+        *,
+        model_id: int,
+        attribute: str,
+        target_group: str,
+        comparison_group: str,
+        originals: list[Applicant],
+        twins: list[Applicant],
+        n: int,
+        seed: int,
+    ) -> ProbeResult:
+        cfg = self.config.get("audit", {}).get("sequential", {})
+        check_every = max(1, int(cfg.get("check_every", 200)))
+        min_pairs = max(1, int(cfg.get("min_pairs", 1000)))
+        level = float(self.config["audit"]["ci_level"])
+        materiality = float(self.config["audit"]["materiality"])
+
+        b = c = 0
+        done = 0
+        decision: dict[str, Any] = {"action": "continue", "reason": ""}
+        for start in range(0, n, check_every):
+            end = min(n, start + check_every)
+            o_resp, t_resp = await self._paired_score(
+                model_id, originals[start:end], twins[start:end]
+            )
+            chunk_b, chunk_c = self._counts(o_resp, t_resp)
+            self._emit_pair_events(
+                probe_id=f"single-{attribute}-{target_group}",
+                phase="single_attribute",
+                changed_field=attribute,
+                originals=originals[start:end],
+                twins=twins[start:end],
+                original_responses=o_resp,
+                twin_responses=t_resp,
+                start_b=b,
+                start_c=c,
+                pair_offset=done,
+            )
+            b += chunk_b
+            c += chunk_c
+            done = end
+            decision = sequential_stopping_decision(
+                b,
+                c,
+                done,
+                materiality=materiality,
+                min_pairs=min_pairs,
+                max_pairs=n,
+                level=level,
+            )
+            if decision["action"] != "continue":
+                break
+
+        stopped_early = (
+            done < n
+            and decision["action"] in {SEQ_MATERIAL_HARM, SEQ_NO_MATERIAL_HARM}
+        )
+        net = (b - c) / done if done else 0.0
+        self._emit(
+            "prober",
+            f"Sequential {ATTR_LABELS[attribute]} {comparison_group}→{target_group}: "
+            f"{done}/{n} twins, b={b}, c={c}, net={net:+.3f}, "
+            f"{'stopped' if stopped_early else 'continued'} "
+            f"({decision.get('reason', '')})",
+            {
+                "attribute": attribute,
+                "target_group": target_group,
+                "comparison_group": comparison_group,
+                "n": done,
+                "requested_n": n,
+                "b": b,
+                "c": c,
+                "net_flip_rate": net,
+                "sequential": True,
+                "stopped_early": stopped_early,
+                "stop_reason": decision["action"],
+                "stopping": decision,
+            },
+        )
+        return ProbeResult(
+            attribute=attribute,
+            target_group=target_group,
+            comparison_group=comparison_group,
+            n=done,
+            b=b,
+            c=c,
+            seed=seed,
+            requested_n=n,
+            stopped_early=stopped_early,
+            stop_reason=str(decision["action"]),
+        )
+
     async def probe_attribute(
         self,
         model_id: int,
@@ -365,6 +506,24 @@ class Prober:
             n, seed, attribute, target_group, comparison_group
         )
         originals, twins = self._build_pairs(originals, attribute, target_group, seed)
+        use_sequential = self.sequential
+        if use_sequential is None:
+            use_sequential = bool(
+                self.config.get("audit", {}).get("sequential", {}).get(
+                    "enabled", False
+                )
+            )
+        if use_sequential:
+            return await self._probe_attribute_sequential(
+                model_id=model_id,
+                attribute=attribute,
+                target_group=target_group,
+                comparison_group=comparison_group,
+                originals=originals,
+                twins=twins,
+                n=n,
+                seed=seed,
+            )
         o_resp, t_resp = await self._paired_score(model_id, originals, twins)
         b, c = self._counts(o_resp, t_resp)
         self._emit_pair_events(
@@ -399,6 +558,7 @@ class Prober:
             b=b,
             c=c,
             seed=seed,
+            requested_n=n,
         )
 
     async def probe_intersectional(

@@ -180,6 +180,85 @@ def running_net_flip_ci(
     return max(-1.0, net - half), min(1.0, net + half)
 
 
+SEQ_CONTINUE = "continue"
+SEQ_MATERIAL_HARM = "stop_material_harm"
+SEQ_NO_MATERIAL_HARM = "stop_no_material_harm"
+SEQ_MAX_PAIRS = "max_pairs"
+
+
+def sequential_stopping_decision(
+    b: int,
+    c: int,
+    n: int,
+    *,
+    materiality: float,
+    min_pairs: int,
+    max_pairs: int,
+    level: float = 0.95,
+) -> dict[str, Any]:
+    """Pre-registered sequential stopping rule for single-attribute probes.
+
+    The rule is deliberately simple and is registered in ``config.yaml`` under
+    ``audit.sequential`` before the audit runs:
+
+    1. Before ``min_pairs``, always continue. This protects the normal
+       approximation from stopping on a handful of discordant pairs.
+    2. At ``max_pairs``, stop with ``max_pairs`` regardless of the interval.
+    3. Otherwise compute the running normal-approximation CI for the net flip
+       rate. If the whole interval is above ``materiality``, stop with
+       ``stop_material_harm``. If the whole interval is below ``materiality``,
+       stop with ``stop_no_material_harm`` (the audit cannot establish a
+       material harm). If the interval contains ``materiality``, continue.
+
+    This is a stopping rule, not a replacement for inference: the final
+    ``Evidence`` still uses the exact McNemar p-value and the seeded bootstrap
+    CI computed from the pairs that were actually observed. The rule is applied
+    only to single-attribute probes; the intersectional scan stays fixed-sample
+    so the Holm family is unchanged.
+    """
+
+    if materiality <= 0:
+        raise ValueError("materiality must be positive")
+    if min_pairs < 1:
+        raise ValueError("min_pairs must be positive")
+    if max_pairs < min_pairs:
+        raise ValueError("max_pairs must be >= min_pairs")
+    if n < 0 or b < 0 or c < 0 or b + c > n:
+        raise ValueError("require 0 <= b, 0 <= c, and b+c <= n")
+
+    net = (b - c) / n if n else 0.0
+    low, high = running_net_flip_ci(b, c, n, level) if n else (0.0, 0.0)
+    payload: dict[str, Any] = {
+        "action": SEQ_CONTINUE,
+        "n": n,
+        "net_flip_rate": net,
+        "ci_low": low,
+        "ci_high": high,
+        "materiality": materiality,
+    }
+    if n >= max_pairs:
+        payload["action"] = SEQ_MAX_PAIRS
+        payload["reason"] = f"reached max_pairs={max_pairs}"
+        return payload
+    if n < min_pairs:
+        payload["reason"] = f"below min_pairs={min_pairs}"
+        return payload
+    if low > materiality:
+        payload["action"] = SEQ_MATERIAL_HARM
+        payload["reason"] = (
+            f"running CI lower bound {low:+.4f} exceeds materiality {materiality:.4f}"
+        )
+        return payload
+    if high < materiality:
+        payload["action"] = SEQ_NO_MATERIAL_HARM
+        payload["reason"] = (
+            f"running CI upper bound {high:+.4f} is below materiality {materiality:.4f}"
+        )
+        return payload
+    payload["reason"] = "running CI still contains materiality"
+    return payload
+
+
 def holm_adjust(pvalues: Iterable[float]) -> list[float]:
     """Holm step-down adjusted p-values, returned in the original order."""
 

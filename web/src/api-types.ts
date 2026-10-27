@@ -11,9 +11,11 @@ export interface AgentEvent {
 export interface AuditCreateRequest {
   model_id: number;
   api_url?: string | null;
+  target?: string | null;
   seed?: number | null;
   include_mitigation?: boolean;
   include_narrative?: boolean;
+  sequential?: boolean | null;
 }
 
 export interface AuditCreated {
@@ -32,6 +34,7 @@ export interface AuditRecord {
   seed: number;
   include_mitigation: boolean;
   include_narrative: boolean;
+  sequential?: boolean;
   created_at: string;
   started_at?: string | null;
   completed_at?: string | null;

@@ -68,6 +68,8 @@ def _fake_audit(
     include_mitigation=True,
     include_narrative=True,
     probe_event_sink=None,
+    target=None,
+    sequential=None,
 ):
     yield AgentEvent(agent="planner", message=f"Audit plan for {model_id}.")
     time.sleep(0.05)
@@ -88,6 +90,8 @@ def _failing_audit(
     include_mitigation=True,
     include_narrative=True,
     probe_event_sink=None,
+    target=None,
+    sequential=None,
 ):
     yield AgentEvent(agent="planner", message="Audit started.")
     raise RuntimeError("sandbox exploded")
@@ -156,6 +160,7 @@ async def test_health_and_audit_lifecycle(client_factory):
     assert record["last_seq"] >= 5
     assert record["event_count"] == record["last_seq"]
     assert record["decision"] is None
+    assert record["sequential"] is False
 
 
 async def test_unknown_audit_and_invalid_model(client_factory):
@@ -300,3 +305,71 @@ async def test_failed_audit_is_reported_and_not_signable(client_factory):
         json={"approver": "Asha", "decision": "approve"},
     )
     assert decision.status_code == 409
+
+
+def _capturing_audit(seen):
+    def audit(
+        model_id,
+        api_url,
+        config,
+        seed=None,
+        *,
+        include_mitigation=True,
+        include_narrative=True,
+        probe_event_sink=None,
+        target=None,
+        sequential=None,
+    ):
+        seen.update(
+            model_id=model_id,
+            api_url=api_url,
+            target=target,
+            sequential=sequential,
+        )
+        yield AgentEvent(agent="planner", message="Capturing audit.")
+        return _report(int(model_id), config)
+
+    return audit
+
+
+async def test_target_adapter_is_resolved_and_recorded(client_factory):
+    seen: dict = {}
+    _, client = await client_factory(_capturing_audit(seen))
+    created = await client.post(
+        "/audits",
+        json={
+            "model_id": 1,
+            "target": "sandbox:2",
+            "sequential": True,
+            "include_mitigation": False,
+            "include_narrative": False,
+        },
+    )
+    assert created.status_code == 202
+    audit_id = created.json()["id"]
+    record = await _wait_for(client, audit_id)
+
+    assert record["status"] == "completed"
+    assert record["target"] == "sandbox:2"
+    assert record["model_id"] == 2
+    assert record["sequential"] is True
+    assert seen["model_id"] == 2
+    assert seen["sequential"] is True
+    assert seen["target"].name == "sandbox-model-2"
+    assert seen["api_url"] == seen["target"].base_url
+
+
+async def test_invalid_target_is_rejected(client_factory):
+    _, client = await client_factory()
+    bad_scheme = await client.post(
+        "/audits", json={"model_id": 2, "target": "sandbox:9"}
+    )
+    assert bad_scheme.status_code == 400
+    outside = await client.post(
+        "/audits", json={"model_id": 2, "target": "../outside.yaml"}
+    )
+    assert outside.status_code == 400
+    missing = await client.post(
+        "/audits", json={"model_id": 2, "target": "targets/missing.yaml"}
+    )
+    assert missing.status_code == 400

@@ -45,6 +45,7 @@ class AuditStore(Protocol):
         seed: int,
         include_mitigation: bool,
         include_narrative: bool,
+        sequential: bool,
     ) -> None: ...
 
     def mark_running(self, audit_id: str) -> None: ...
@@ -112,6 +113,7 @@ class SQLiteAuditStore:
                     seed INTEGER NOT NULL,
                     include_mitigation INTEGER NOT NULL DEFAULT 1,
                     include_narrative INTEGER NOT NULL DEFAULT 1,
+                    sequential INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     started_at TEXT,
                     completed_at TEXT,
@@ -141,6 +143,14 @@ class SQLiteAuditStore:
                 "CREATE INDEX IF NOT EXISTS audit_events_audit_seq "
                 "ON audit_events (audit_id, seq)"
             )
+            # Add v2 R2 columns to databases created by R1.
+            columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(audits)").fetchall()
+            }
+            if "sequential" not in columns:
+                conn.execute(
+                    "ALTER TABLE audits ADD COLUMN sequential INTEGER NOT NULL DEFAULT 0"
+                )
 
     def create_audit(
         self,
@@ -152,14 +162,15 @@ class SQLiteAuditStore:
         seed: int,
         include_mitigation: bool,
         include_narrative: bool,
+        sequential: bool,
     ) -> None:
         with self._connection() as conn:
             conn.execute(
                 """
                 INSERT INTO audits (
                     id, status, model_id, target, api_url, seed,
-                    include_mitigation, include_narrative, created_at
-                ) VALUES (?, 'queued', ?, ?, ?, ?, ?, ?, ?)
+                    include_mitigation, include_narrative, sequential, created_at
+                ) VALUES (?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     audit_id,
@@ -169,6 +180,7 @@ class SQLiteAuditStore:
                     seed,
                     int(include_mitigation),
                     int(include_narrative),
+                    int(sequential),
                     utc_now(),
                 ),
             )
@@ -269,6 +281,7 @@ class SQLiteAuditStore:
         data["result"] = json.loads(result_json) if result_json else None
         data["include_mitigation"] = bool(data["include_mitigation"])
         data["include_narrative"] = bool(data["include_narrative"])
+        data["sequential"] = bool(data.get("sequential", 0))
         for key in ("created_at", "started_at", "completed_at", "decided_at"):
             if data.get(key):
                 data[key] = _iso(str(data[key]))

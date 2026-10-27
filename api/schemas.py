@@ -23,19 +23,28 @@ class StreamEvent(ServiceModel):
 
 
 class AuditCreateRequest(ServiceModel):
-    """Start an audit against one of the synthetic sandbox models.
+    """Start an audit against a sandbox model or a YAML target adapter.
 
-    ``api_url`` is optional; it defaults to the frozen config URL. The request
-    is intentionally narrow in v1 of the API. R2 adds target adapters.
+    ``target`` accepts ``sandbox:N`` for the seven validation adapters or a
+    repository-relative path to a YAML adapter. When omitted, the audit talks
+    directly to ``api_url`` exactly as in v1.
     """
 
-    model_id: int = Field(ge=1, description="Synthetic sandbox model id (1-7)")
+    model_id: int = Field(ge=1, le=7, description="Report model label (1-7)")
     api_url: str | None = Field(
         default=None, description="Sandbox base URL; defaults to config.yaml"
+    )
+    target: str | None = Field(
+        default=None,
+        description="Target adapter: 'sandbox:N' or a YAML path under the repo",
     )
     seed: int | None = Field(default=None, ge=0)
     include_mitigation: bool = True
     include_narrative: bool = True
+    sequential: bool | None = Field(
+        default=None,
+        description="Override audit.sequential.enabled for this audit",
+    )
 
 
 class AuditCreated(ServiceModel):
@@ -74,6 +83,7 @@ class AuditRecord(ServiceModel):
     seed: int
     include_mitigation: bool
     include_narrative: bool
+    sequential: bool = False
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None

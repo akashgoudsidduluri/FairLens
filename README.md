@@ -128,6 +128,77 @@ Regenerate the TypeScript client types after changing `api/schemas.py`:
 This writes `web/src/api-types.ts`; `tests/test_v2_types.py` fails if the file is
 stale.
 
+### Target adapters (v2)
+
+The seven sandbox models ship as YAML validation adapters. Select one with
+`target: "sandbox:N"`; the request's `api_url` (or `FAIRLENS_API_URL`) overrides
+the YAML base URL:
+
+```powershell
+$body = '{"model_id": 2, "target": "sandbox:2", "include_mitigation": false, "include_narrative": false}'
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8020/audits `
+  -ContentType 'application/json' -Body $body
+```
+
+A custom target is a repository-relative YAML file. The adapter maps canonical
+applicant fields into the target request and maps the reply back to
+`(approved, score)`:
+
+```yaml
+name: my-lender
+base_url: "${LENDER_URL:-https://example.test}"
+auth:
+  type: header            # none | header | bearer | query
+  header_name: X-API-Key
+  token_env: LENDER_API_KEY
+request:
+  method: POST
+  path: /v1/decisions
+  query: {product: personal_loan}
+  headers: {Accept: application/json}
+  applicant_map:
+    annual_income: "${applicant.income}"
+    credit: "${applicant.credit_score}"
+    applicant_ref: "${applicant.id}"
+  body:
+    applicants: "${applicants}"
+response:
+  items: "$.decisions"
+  approved: "result"
+  approved_true: ["APPROVE", true]
+  score: "score"
+limits:
+  probe_cap: 100000       # hard per-audit cap; 0 disables it
+  rate_limit_per_second: 20
+  max_retries: 3
+  backoff_seconds: 0.25
+  timeout_seconds: 20
+```
+
+Secrets are read from environment variables named in YAML; they are never stored
+in the audit record. Adapters reject paths outside the repository and count
+applicants (not retries) against the cap. The shared sandbox mapping lives in
+`targets/sandbox/_sandbox.yaml`; `model-1.yaml` through `model-7.yaml` only
+change the `model` query parameter. `tests/test_v2_targets.py` validates all
+seven adapters against the real sandbox app over ASGI.
+
+### Sequential stopping (v2)
+
+Sequential stopping is pre-registered in `config.yaml` and disabled by default so
+v1 fixed-sample runs stay reproducible. Enable it globally or per request:
+
+```powershell
+$body = '{"model_id": 2, "sequential": true, "include_mitigation": false, "include_narrative": false}'
+```
+
+The rule (documented in `auditor/statistician.py` and D-018): before
+`min_pairs` continue; at `max_pairs` stop; otherwise stop once the running
+normal-approximation CI for the net flip rate is entirely above `materiality`
+(material harm) or entirely below it (no material harm). Final findings still use
+the exact McNemar p-value and seeded bootstrap CI on the pairs actually observed.
+The intersectional scan stays fixed-sample. `tests/test_v2_sequential.py`
+compares a sequential run with a fixed-sample run on the same fake scorer.
+
 ## Tests
 
 ```powershell
@@ -138,7 +209,8 @@ The suite covers the frozen contracts, generator and seven models, twin
 construction, exact McNemar/bootstrap/Holm statistics, Skeptic rules, mitigation,
 impact arithmetic, certificate chain and tamper detection, number checking, the
 reporter fallback, Streamlit flows (audit, approve/reject, demo, tamper),
-black-box import boundaries, launchers, and the shared Plotly theme.
+black-box import boundaries, launchers, the shared Plotly theme, and the v2
+audit API, SSE stream, generated types, target adapters, and sequential stopping.
 
 ## Evaluation
 
@@ -194,6 +266,7 @@ the Model 5 miss, are in [DECISIONS.md](DECISIONS.md).
 | `trust/` | Certificate payload, SQLite hash chain, verification, tamper demo |
 | `ui/` | Streamlit app, pure HTML components, Plotly theme, CSS |
 | `api/` | v2 FastAPI audit service, SQLite store, SSE stream, TS type generation |
+| `targets/` | v2 YAML target adapters, sandbox validation adapters, probe caps |
 | `web/src/api-types.ts` | TypeScript types generated from the OpenAPI schema |
 | `eval/` | Full evaluation, Fairlearn baseline, charts, headless demo smoke |
 | `tests/` | pytest suite, including black-box boundary and v2 API/SSE tests |

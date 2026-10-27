@@ -45,6 +45,7 @@ from api.schemas import (
     VerifyResponse,
 )
 from api.storage import AuditStore, create_store
+from targets import TargetError, build_target, sandbox_model_id
 
 HEARTBEAT_SECONDS = 15.0
 
@@ -71,6 +72,7 @@ def _record_response(record: dict[str, Any]) -> AuditRecord:
         seed=int(record["seed"]),
         include_mitigation=bool(record["include_mitigation"]),
         include_narrative=bool(record["include_narrative"]),
+        sequential=bool(record.get("sequential", False)),
         created_at=record["created_at"],
         started_at=record.get("started_at"),
         completed_at=record.get("completed_at"),
@@ -147,27 +149,50 @@ def create_app(
             raise HTTPException(
                 status_code=422, detail="model_id must be between 1 and 7"
             )
-        api_url = (request.api_url or str(cfg["api"]["base_url"])).strip()
+        model_id = request.model_id
+        target_ref = (request.target or "").strip() or None
+        adapter = None
+        if target_ref is not None:
+            try:
+                adapter = build_target(target_ref, cfg, base_url=request.api_url)
+            except (TargetError, ValueError, FileNotFoundError) as exc:
+                raise HTTPException(
+                    status_code=400, detail=f"invalid target: {exc}"
+                ) from exc
+            api_url = adapter.base_url
+            sandbox_model = sandbox_model_id(target_ref)
+            if sandbox_model is not None:
+                model_id = sandbox_model
+        else:
+            api_url = (request.api_url or str(cfg["api"]["base_url"])).strip()
         if not api_url:
             raise HTTPException(status_code=422, detail="api_url cannot be empty")
         seed = int(cfg.get("seed", 42) if request.seed is None else request.seed)
+        sequential = (
+            request.sequential
+            if request.sequential is not None
+            else bool(cfg.get("audit", {}).get("sequential", {}).get("enabled", False))
+        )
         audit_id = uuid.uuid4().hex
         audit_store.create_audit(
             audit_id=audit_id,
-            model_id=request.model_id,
-            target=None,
+            model_id=model_id,
+            target=target_ref,
             api_url=api_url,
             seed=seed,
             include_mitigation=request.include_mitigation,
             include_narrative=request.include_narrative,
+            sequential=sequential,
         )
         manager.start(
             audit_id,
-            model_id=request.model_id,
+            model_id=model_id,
             api_url=api_url,
             seed=seed,
             include_mitigation=request.include_mitigation,
             include_narrative=request.include_narrative,
+            sequential=sequential,
+            target=adapter,
         )
         return AuditCreated(
             id=audit_id,

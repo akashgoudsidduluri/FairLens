@@ -26,6 +26,7 @@ from auditor.statistician import (
 )
 from impact.impact import impact_per_10k
 from schemas import AgentEvent, AuditReport, Evidence, Finding, ProbeEvent
+from targets.base import TargetAdapter
 
 ATTRIBUTES = ("gender", "pincode_group", "name_group")
 ATTRIBUTE_LABELS = {
@@ -64,6 +65,8 @@ def run_audit(
     include_mitigation: bool = True,
     include_narrative: bool = True,
     probe_event_sink: Callable[[list[ProbeEvent]], None] | None = None,
+    target: TargetAdapter | None = None,
+    sequential: bool | None = None,
 ) -> Generator[AgentEvent, None, AuditReport]:
     seed = int(config.get("seed", 42) if seed is None else seed)
     cfg = config["audit"]
@@ -74,7 +77,13 @@ def run_audit(
     iterations = int(cfg["bootstrap_iterations"])
     level = float(cfg["ci_level"])
 
-    prober = Prober(api_url, config, pair_event_sink=probe_event_sink)
+    prober = Prober(
+        api_url,
+        config,
+        pair_event_sink=probe_event_sink,
+        target=target,
+        sequential=sequential,
+    )
     yield _event(
         "planner",
         f"Audit plan: {model_id} | observational sample {config['data']['n_observational']} | "
@@ -82,6 +91,20 @@ def run_audit(
         f"per intersectional cell | alpha={alpha} | materiality={materiality} | Holm",
         {"model_id": model_id, "seed": seed},
     )
+    seq_enabled = (
+        sequential
+        if sequential is not None
+        else bool(cfg.get("sequential", {}).get("enabled", False))
+    )
+    if seq_enabled:
+        seq_cfg = cfg.get("sequential", {})
+        yield _event(
+            "planner",
+            f"Sequential stopping enabled: min_pairs={seq_cfg.get('min_pairs', 1000)}, "
+            f"check_every={seq_cfg.get('check_every', 200)}; final inference uses "
+            f"the fixed-sample McNemar/bootstrap on observed pairs",
+            {"sequential": True, "config": seq_cfg},
+        )
 
     try:
         prober.check_health_sync()
@@ -135,6 +158,20 @@ def run_audit(
         )
         for event in _drain(prober):
             yield event
+        if probe.stopped_early:
+            yield _event(
+                "statistician",
+                f"Sequential stop for {ATTRIBUTE_LABELS[attribute]}: "
+                f"{probe.n}/{probe.requested_n} pairs ({probe.stop_reason})",
+                {
+                    "attribute": attribute,
+                    "n": probe.n,
+                    "requested_n": probe.requested_n,
+                    "stop_reason": probe.stop_reason,
+                    "b": probe.b,
+                    "c": probe.c,
+                },
+            )
         evidence = paired_evidence(
             probe.b,
             probe.c,

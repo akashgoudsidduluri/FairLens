@@ -33,6 +33,20 @@ audit:
   seeds: [1, 2, 3, 4, 5]
   bootstrap_iterations: 4000
   ci_level: 0.95
+  # Pre-registered sequential stopping for single-attribute probes. Disabled by
+  # default so v1 fixed-sample results remain reproducible. When enabled, the
+  # audit may stop once the running normal-approximation CI excludes materiality
+  # (see DECISIONS.md D-018). Intersectional cells remain fixed-sample.
+  sequential:
+    enabled: false
+    min_pairs: 1000
+    check_every: 200
+
+# Target adapters (v2). `probe_cap` is a hard ceiling on applicants sent to a
+# custom target in one audit; the sandbox validation adapters ship 100000.
+targets:
+  probe_cap: 100000
+  sandbox_dir: targets/sandbox
 
 models:
   approval_threshold: 500.0

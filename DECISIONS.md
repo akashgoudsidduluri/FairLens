@@ -234,3 +234,41 @@ implementation fixes but must not tune those values.
 - v1 audit semantics are unchanged: no thresholds, pair counts, penalties, or
   existing tests were modified. `service` and `probe_event_batch_size` are
   operational settings only.
+
+## D-018 (v2 R2) Target adapters and pre-registered sequential stopping
+- `targets/` is a black-box adapter layer. It imports `schemas.py`, `httpx`, and
+  YAML only; it never imports `sandbox.models` or `sandbox.api`. The seven
+  `targets/sandbox/model-N.yaml` files are validation adapters for the existing
+  sandbox service, not shortcuts around HTTP.
+- The YAML format separates concerns: `request.applicant_map` maps canonical
+  `Applicant` fields, `request.body` is a template (`${applicants}` for a list),
+  `response.items`/`approved`/`score` map the reply, and `limits` owns the probe
+  cap, rate limit, retries/backoff, and timeout. `${VAR}` and `${VAR:-default}`
+  read the environment; a missing variable is an error, never an empty string.
+- Auth is `none`, `header`, `bearer`, or `query`, with the secret always read
+  from an environment variable named in YAML. Secrets are never stored in the
+  audit record or certificate.
+- Every audit gets a fresh adapter instance. The hard probe cap is checked before
+  any HTTP request and counts applicants, not retries. Exceeding the cap fails
+  the audit; the job manager records the failure. This is deliberately not a
+  warning.
+- Adapter mode scores chunks sequentially so the rate limiter and cap see one
+  request at a time. Direct-URL mode keeps the existing concurrent batching.
+- Sequential stopping is pre-registered under `audit.sequential` and is **off by
+  default**. Enabling it by default would change v1's fixed-sample counts and
+  break the frozen evaluation, so it is opt-in per config or per API request.
+- The rule: before `min_pairs`, continue; at `max_pairs`, stop; otherwise stop
+  for material harm when the running normal-approximation CI's lower bound
+  exceeds `materiality`, and stop for no material harm when the upper bound is
+  below `materiality`. If the interval contains `materiality`, continue. The
+  rule is applied to single-attribute probes only; the intersectional scan stays
+  fixed-sample so its Holm family is unchanged.
+- Sequential stopping is a stopping heuristic, not a new inference procedure.
+  Final findings still use the exact McNemar p-value and seeded bootstrap CI on
+  the pairs actually observed, and the report records `stopped_early` and
+  `stop_reason` on the probe result. The normal approximation can be
+  anti-conservative at low discordant counts; `min_pairs` is the safeguard.
+- The audit record stores `sequential` and the target reference. Existing R1
+  SQLite databases are migrated in place with an `ALTER TABLE ... ADD COLUMN`
+  guarded by `PRAGMA table_info`.
+- No frozen threshold, penalty, `expected_findings.md`, or v1 test was changed.

@@ -206,3 +206,53 @@ Endpoints:
 Generated from `app.openapi()`. Contains `AgentEvent`, `ProbeEvent`,
 `StreamEvent`, all request/response models, and `AuditReport`. Regenerate with
 `python -m api.generate_types`; `tests/test_v2_types.py` fails if stale.
+
+## `targets/` (v2 R2)
+Black-box target adapters. No module imports `sandbox.models` or `sandbox.api`.
+
+- `targets.base.TargetAdapter`: abstract contract with `name`, `probe_cap`,
+  `probes_used`, `reset()`, `health()`, and `score_batch(applicants) ->
+  list[ModelResponse]`. `TargetError` is the base failure; `ProbeCapExceeded`
+  is raised before any request that would exceed the hard cap.
+- `targets.http.HTTPTargetAdapter`: declarative YAML adapter.
+  - `base_url` supports `${VAR}` / `${VAR:-default}`.
+  - `auth.type` is `none`, `header`, `bearer`, or `query`; `token_env` names the
+    environment variable, never a literal secret.
+  - `request.applicant_map` maps canonical fields; `request.body` expands
+    `${applicants}` to the mapped list; `request.query`/`headers` are templates.
+  - `response.items` is a dotted path (`$`, `$.results`, `results`);
+    `response.approved`/`score` are dotted paths per item. `approved_true` lists
+    truthy values; `approval_threshold` derives approval from the score if set.
+  - `limits`: `probe_cap` (hard, 0 disables), `rate_limit_per_second`
+    (monotonic spacing), `max_retries` (5xx/transport only), `backoff_seconds`
+    (exponential), `timeout_seconds`.
+- `targets.sandbox.load_sandbox_target(model_id, ...)`: loads
+  `targets/sandbox/model-N.yaml`; `targets.sandbox._sandbox.yaml` holds the
+  shared request/response mapping. The seven files are the validation suite.
+- `targets.build_target(reference, config, ...)`: resolves `sandbox:N` or a
+  repository-relative YAML path. Paths outside the repository are rejected.
+- `config.yaml` adds `targets.probe_cap` and `targets.sandbox_dir`.
+
+## Sequential stopping (v2 R2)
+`auditor.statistician.sequential_stopping_decision(b, c, n, materiality,
+min_pairs, max_pairs, level)` returns a dict with `action`, `n`,
+`net_flip_rate`, `ci_low`, `ci_high`, `materiality`, and `reason`. Actions:
+`continue`, `stop_material_harm`, `stop_no_material_harm`, `max_pairs`.
+
+`config.yaml` pre-registers:
+
+```yaml
+audit:
+  sequential:
+    enabled: false
+    min_pairs: 1000
+    check_every: 200
+```
+
+`Prober(..., sequential=...)` overrides the config flag per audit.
+`probe_attribute` scores in `check_every` chunks, continues the running
+`ProbeEvent` stream across chunks, and returns a `ProbeResult` with
+`requested_n`, `stopped_early`, and `stop_reason`. The pipeline emits an extra
+`statistician` event on a stop. `run_audit(..., target=..., sequential=...)`
+forwards both. Intersectional probes remain fixed-sample; final `Evidence` always
+uses the observed pairs.

@@ -1,0 +1,6 @@
+base: _sandbox.yaml
+name: sandbox-model-7
+description: Synthetic sandbox model 7
+request:
+  query:
+    model: 7

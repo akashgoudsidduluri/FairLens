@@ -128,10 +128,10 @@ implementation fixes but must not tune those values.
 - `eval/demo_smoke.py` is the headless end-to-end check. It uses a real sandbox
   process and HTTP, asserts each audit is under 60 seconds, verifies the
   certificate/tamper flow, and verifies graceful failure on an unreachable API.
-  The total three-model walkthrough was 58.3s in the recorded headless run;
-  individual audits were 23.3s, 15.0s, and 20.0s. A Phase 6 rerun measured
-  67.9s (27.7s, 17.5s, 22.6s); both runs keep every audit under the 60s budget.
-  The reported numbers are measurements, not targets.
+  The total three-model walkthrough was 58.3s in the first recorded headless run;
+  individual audits were 23.3s, 15.0s, and 20.0s. Later runs measured 67.9s
+  (27.7s, 17.5s, 22.6s) and 75.6s (30.2s, 24.2s, 21.1s). Every run keeps every
+  audit under the 60s budget. The reported numbers are measurements, not targets.
 - SQLite connections are explicitly closed after use, because Windows keeps a
   lock on the certificate file until the connection is closed.
 
@@ -175,3 +175,32 @@ implementation fixes but must not tune those values.
 - Evaluation charts use Pillow (`eval/charts.py`) because Matplotlib's native
   font DLL is blocked on the build machine.
 
+## D-016 (Phase 7 fixes) Post-freeze correctness and honesty fixes
+- Model 6 uses deterministic **per-applicant** noise: `sha256(noise_seed |
+  applicant.id | applicant JSON)` seeds one Gaussian draw. Twins therefore get
+  independent draws, and a retried request gets the same score. The frozen
+  `expected_findings.md` says "independent per-request noise"; that file is a
+  pre-registration artifact and is not edited. This entry records the
+  implementation difference. It does not change Model 6's outcome: the audit
+  still keeps 0 findings; `_noise` was never re-tuned.
+- The certificate hash chain proves modification/reordering resistance, not
+  authorship, and it cannot detect deletion of trailing records without an
+  external anchor (a published head hash or append-only log). The UI and report
+  state both limitations.
+- `run.ps1` / `run.sh` export `FAIRLENS_API_URL` from the port they actually
+  launched, and the dashboard reads it. Previously `FAIRLENS_API_PORT=9000`
+  moved the sandbox but left the UI pointing at 8010.
+- Certificates now embed `report.config`, the config the audit actually ran
+  with, rather than the global config at signing time. A sensitivity run can no
+  longer produce a certificate whose thresholds differ from its findings.
+- `impact.mitigate.recommend` now returns `within_budget`. If no tested offset
+  fits the budget (only reachable with a negative budget or a malformed curve),
+  it shows the unaudited baseline and says so instead of claiming a
+  budget-breaking offset is compliant.
+- The dashboard keeps per-model events for the demo run, so "Open demo result"
+  swaps the log and pipeline strip to the selected model. Before this, the
+  report changed but the log still described Model 5.
+- Template narrative trimming now drops only the per-finding detail sentences
+  (`For ...`). It can no longer drop the rejected/immaterial disclosure or the
+  limitations paragraph. The reported intersectional-cell count no longer has an
+  `or 12` fallback that could contradict a measured value.

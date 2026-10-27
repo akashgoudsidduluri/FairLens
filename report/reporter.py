@@ -74,8 +74,7 @@ def build_payload(report: AuditReport, events: list[Any] | None = None) -> dict[
             "matched_n_pairs": int(audit_cfg.get("matched_n_pairs", 0)),
             "intersectional_cells": len(
                 report.observational.get("intersectional_cells", [])
-            )
-            or 12,
+            ),
         },
         "audit": {
             "alpha": float(audit_cfg.get("alpha", 0.05)),
@@ -174,9 +173,15 @@ def template_narrative(payload: dict[str, Any], max_words: int = 250) -> str:
     )
     text = " ".join(parts)
     if _word_count(text) > max_words:
-        # Drop detail sentences (not the limitations) until within budget.
-        while len(parts) > 3 and _word_count(" ".join(parts)) > max_words:
-            parts.pop(2)
+        # Drop the per-finding detail sentences first; never drop the headline,
+        # the rejected/immaterial disclosure, or the limitations paragraph.
+        detail_positions = [
+            index for index, part in enumerate(parts) if part.startswith("For ")
+        ]
+        for position in reversed(detail_positions):
+            if _word_count(" ".join(parts)) <= max_words:
+                break
+            parts.pop(position)
         text = " ".join(parts)
     return text
 

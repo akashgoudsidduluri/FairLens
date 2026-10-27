@@ -22,8 +22,10 @@ Pydantic v2 contracts: `Applicant`, `ModelResponse`, `TwinPair`, `Evidence`,
 ## `sandbox/models.py`
 Private. Seven scoring functions with documented base formula and planted
 penalties from config. `score_applicant(model_id, applicant, config) -> ModelResponse`.
-Model 6 adds per-request seeded noise. Model 7 is income-only. Never imported by
-the auditor.
+Model 6 adds deterministic per-applicant Gaussian noise seeded from the noise
+seed and the applicant payload; it is independent across twins, not re-drawn per
+request, so a retried request returns the same score. Model 7 is income-only.
+Never imported by the auditor.
 
 ## `sandbox/api.py`
 FastAPI app. `GET /health`; `POST /score?model=N`; `POST /score_batch?model=N`.

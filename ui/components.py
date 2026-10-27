@@ -201,8 +201,8 @@ def log_feed(events: Iterable[Any], running: bool = False) -> str:
             "</div>"
         )
 
-    # Reverse the chronological order: with flex-direction: column-reverse the
-    # newest item lands at the bottom but remains the first DOM child.
+    # The log container is a normal column flexbox (newest at the top), so
+    # reverse the chronological list to put the newest event first in the DOM.
     rows.reverse()
     cursor = (
         '<div class="fl-log__cursor" aria-hidden="true">'

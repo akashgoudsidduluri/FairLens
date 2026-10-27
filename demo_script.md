@@ -118,8 +118,8 @@ before the first audit.
   The UI shows a clean error and does not crash.
 - **Port 8010 busy**: `$env:FAIRLENS_API_PORT=8020; $env:FAIRLENS_UI_PORT=8502;
   .\run.ps1`.
-- **Audit is slow**: use **Demo mode**; the recorded headless run was 67.9s for
-  all three models (27.7s, 17.5s, 22.6s), and each audit is under the 60s budget.
+- **Audit is slow**: use **Demo mode**; the recorded headless runs took 67.9s
+  and 75.6s for all three models, and each audit is under the 60s budget.
 - **Certificate tab is red before the demo**: press **Reset demo certificate
   database**. The database is local and disposable.
 - **No Anthropic key**: the template narrative is expected and passes the number

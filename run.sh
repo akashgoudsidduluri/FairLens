@@ -48,6 +48,9 @@ fi
 echo "FairLens sandbox: ${API_URL}"
 echo "FairLens dashboard: http://127.0.0.1:${UI_PORT}"
 echo "Demo path: Model 2 (gender) -> Model 7 (confounded) -> Model 5 (intersectional)."
+# The dashboard reads this so a FAIRLENS_API_PORT override also moves the URL
+# the UI probes, not just the sandbox process.
+export FAIRLENS_API_URL="$API_URL"
 "$PY" -m streamlit run ui/app.py --server.address 127.0.0.1 --server.port "$UI_PORT" &
 UI_PID=$!
 wait "$UI_PID"

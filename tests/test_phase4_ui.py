@@ -137,10 +137,16 @@ def app_test(monkeypatch, tmp_path):
     monkeypatch.setattr("config_loader.load_config", lambda *args, **kwargs: config)
 
     def fake_run_audit(model_id, api_url, config, seed=None, **kwargs):
-        yield AgentEvent(agent="planner", message="Audit plan prepared for the UI test.")
-        yield AgentEvent(agent="statistician", message="Candidate evidence computed.")
-        report.model_id = int(model_id)
-        return report
+        yield AgentEvent(
+            agent="planner", message=f"Audit plan prepared for model {model_id}."
+        )
+        yield AgentEvent(
+            agent="statistician",
+            message=f"Candidate evidence computed for model {model_id}.",
+        )
+        run_report = report.model_copy(deep=True)
+        run_report.model_id = int(model_id)
+        return run_report
 
     monkeypatch.setattr("auditor.pipeline.run_audit", fake_run_audit)
     at = AppTest.from_file(str(ROOT / "ui" / "app.py"), default_timeout=60)
@@ -213,6 +219,31 @@ def test_ui_demo_mode_runs_the_three_models(app_test):
     assert "Model 2" in html and "Model 7" in html and "Model 5" in html
     assert "Audit of Model 5" in html
     assert len([select for select in at.selectbox if select.label == "Inspect a demo result"]) == 1
+
+
+def test_ui_open_demo_result_restores_that_models_log(app_test):
+    at, _ = app_test
+    _click(at, "Demo mode")
+    at.run()
+    assert not at.exception, [exc.value for exc in at.exception]
+
+    demo_events = at.session_state["demo_events"]
+    assert set(demo_events) == {2, 7, 5}
+
+    next(
+        select for select in at.selectbox if select.label == "Inspect a demo result"
+    ).set_value(2)
+    at.run()
+    _click(at, "Open demo result")
+    at.run()
+
+    assert not at.exception, [exc.value for exc in at.exception]
+    assert at.session_state["report"].model_id == 2
+    assert at.session_state["events"] == demo_events[2]
+    assert all(
+        "model 2" in event.message.lower()
+        for event in at.session_state["events"]
+    )
 
 
 def test_ui_reject_logs_decision_without_approval(app_test):

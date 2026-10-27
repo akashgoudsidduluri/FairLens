@@ -133,16 +133,30 @@ def recommend(
     if not curve:
         return None
     eligible = [p for p in curve if p["accuracy_loss"] <= max_accuracy_loss + 1e-12]
-    pool = eligible or [curve[0]]
-    best = min(pool, key=lambda p: (p["fairness_gap"], p["offset"]))
+    within_budget = bool(eligible)
+    if within_budget:
+        best = min(eligible, key=lambda p: (p["fairness_gap"], p["offset"]))
+        rationale = (
+            "Smallest fairness gap among offsets whose accuracy loss is within "
+            f"the {max_accuracy_loss:.1%} budget; ties go to the smaller offset."
+        )
+    else:
+        # This is only reachable with a negative budget or a malformed curve.
+        # Never present a budget-breaking offset as a recommendation: show the
+        # smallest tested offset (the baseline when present) and say that no
+        # compliant point exists.
+        best = min(curve, key=lambda p: p["offset"])
+        rationale = (
+            f"No tested offset keeps accuracy loss within the "
+            f"{max_accuracy_loss:.1%} budget. The smallest tested offset is shown; "
+            "raise the budget to see a compliant offset."
+        )
     return {
         **best,
         "max_accuracy_loss": float(max_accuracy_loss),
         "eligible_points": len(eligible),
-        "rationale": (
-            "Smallest fairness gap among offsets whose accuracy loss is within "
-            f"the {max_accuracy_loss:.1%} budget; ties go to the smaller offset."
-        ),
+        "within_budget": within_budget,
+        "rationale": rationale,
     }
 
 

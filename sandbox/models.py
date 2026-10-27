@@ -15,8 +15,9 @@ Base score for models 1-6 (all coefficients come from config.yaml):
            + w_burden * burden_norm
 
 Approve iff score >= approval_threshold. Each planted penalty is subtracted from
-the base score in the relevant subgroup. Model 6 adds independent per-request
-Gaussian noise. Model 7 uses income alone.
+the base score in the relevant subgroup. Model 6 adds deterministic
+per-applicant Gaussian noise (independent across twins, stable across retries).
+Model 7 uses income alone.
 
 The API must not reveal which model has which penalty.
 """
@@ -55,11 +56,11 @@ def base_score(applicant: Applicant, config: dict[str, Any]) -> float:
 
 
 def _noise(applicant: Applicant, config: dict[str, Any]) -> float:
-    """Deterministic per-request noise: hash(seed, applicant) -> Gaussian draw.
+    """Deterministic per-applicant noise: hash(seed, applicant) -> Gaussian draw.
 
     Same applicant in the same run gets the same noise, so a whole audit is
-    reproducible from the configured seed. Different twins get independent
-    draws.
+    reproducible from the configured seed and a retried request returns the same
+    score. Different twins get independent draws.
     """
 
     m = config["models"]

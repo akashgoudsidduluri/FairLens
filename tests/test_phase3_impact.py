@@ -59,9 +59,28 @@ def test_recommend_respects_accuracy_budget():
     rec = recommend(curve, 0.02)
     assert rec is not None
     assert rec["offset"] == 20
+    assert rec["within_budget"] is True
     rec2 = recommend(curve, 0.05)
     assert rec2 is not None and rec2["offset"] == 40
+    assert rec2["within_budget"] is True
     assert recommend([], 0.02) is None
+
+
+def test_recommend_with_no_budget_compliant_point_is_truthful():
+    # A well-formed curve always has a zero-loss baseline, so this state only
+    # arises with a negative budget or a malformed curve. The function must not
+    # present a budget-breaking point as compliant.
+    curve = [
+        {"offset": 20, "fairness_gap": 0.30, "accuracy_loss": 0.05},
+        {"offset": 40, "fairness_gap": 0.10, "accuracy_loss": 0.08},
+    ]
+    rec = recommend(curve, 0.02)
+    assert rec is not None
+    assert rec["within_budget"] is False
+    assert rec["eligible_points"] == 0
+    assert rec["offset"] == 20
+    assert "No tested offset" in rec["rationale"]
+    assert "Smallest fairness gap" not in rec["rationale"]
 
 
 def _free_port() -> int:

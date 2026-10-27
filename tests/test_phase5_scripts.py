@@ -20,6 +20,21 @@ def test_launchers_use_the_sandbox_entrypoint_and_demo_ports():
         assert "8010" in text, name
         assert "8501" in text, name
         assert "Model 2" in text and "Model 7" in text and "Model 5" in text, name
+        assert "FAIRLENS_API_URL" in text, name
+
+
+def test_ui_api_url_defaults_to_launcher_env(monkeypatch, tmp_path):
+    config = load_config()
+    config["certificate"]["db_path"] = str(tmp_path / "env-ui.db")
+    monkeypatch.setattr("config_loader.load_config", lambda *args, **kwargs: config)
+    monkeypatch.setenv("FAIRLENS_API_URL", "http://127.0.0.1:9123")
+
+    at = AppTest.from_file(str(ROOT / "ui" / "app.py"), default_timeout=60)
+    at.run()
+
+    assert not at.exception, [exc.value for exc in at.exception]
+    field = next(t for t in at.text_input if t.label == "Sandbox API URL")
+    assert field.value == "http://127.0.0.1:9123"
 
 
 def test_ui_shows_friendly_error_when_api_is_unreachable(monkeypatch, tmp_path):

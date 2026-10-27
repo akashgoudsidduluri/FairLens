@@ -31,6 +31,9 @@ try {
     Write-Host "FairLens sandbox: $apiUrl"
     Write-Host "FairLens dashboard: http://127.0.0.1:$uiPort"
     Write-Host "Demo path: Model 2 (gender) -> Model 7 (confounded) -> Model 5 (intersectional)."
+    # The dashboard reads this so a FAIRLENS_API_PORT override also moves the
+    # URL the UI probes, not just the sandbox process.
+    $env:FAIRLENS_API_URL = $apiUrl
     & $py -m streamlit run ui/app.py --server.address 127.0.0.1 --server.port $uiPort
 } finally {
     Stop-Process -Id $api.Id -ErrorAction SilentlyContinue

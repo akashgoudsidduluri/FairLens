@@ -173,7 +173,7 @@ The scoring functions are private to the sandbox. The audit never reads them.
 | 3 | −120 points for pincode group P2 | P2 kept; gender and name not kept |
 | 4 | −120 points for name group N2 | N2 kept; gender and pincode not kept |
 | 5 | −240 points only if female, 45+, and rural | Hotspot kept; single-attribute gender immaterial |
-| 6 | Independent per-request noise | No kept findings |
+| 6 | Deterministic per-applicant noise (independent across twins) | No kept findings |
 | 7 | Income-only score; generator gives P2/N2/women lower income | Observational candidates rejected as confounded; 0 kept |
 
 Model 5's design uses a target cell that is about 2% of the population, so the
@@ -398,8 +398,9 @@ median main audit took **26.3 s**; 32 of 35 were under 60 s. Three Model 7
 audits recorded 665–672 s while sharing three sandbox processes with other
 audits; they returned identical results, and the next two Model 7 seeds on the
 same code took 32.0 s and 29.2 s. The serial, single-user demo is the fair
-latency benchmark: **67.9 s for all three demo models** (27.7 s, 17.5 s,
-22.6 s), measured by `eval.demo_smoke` against a real sandbox.
+latency benchmark: **75.6 s for all three demo models** (30.2 s, 24.2 s,
+21.1 s), measured by `eval.demo_smoke` against a real sandbox. An earlier run
+of the same code measured 67.9 s; both runs keep every audit under 60 s.
 
 The report does not hide the outliers: they are in `results.csv` with
 `runtime_under_60 = False`. They are not used to claim a latency win.
@@ -412,7 +413,7 @@ The report does not hide the outliers: they are in `results.csv` with
 | Chain valid before tamper | True |
 | Chain valid after tamper | False |
 | First broken record | 0 |
-| Certificate hash (final run) | `f8204ddb5609c8644bf83cfa149eec2b243507522b339346a1505f59af699345` |
+| Certificate hash (eval harness run) | `f8204ddb5609c8644bf83cfa149eec2b243507522b339346a1505f59af699345` |
 
 The tamper demo edits a real row, then verification recomputes every hash and
 link and reports the first failure. The hash changes on every run because the
@@ -506,8 +507,9 @@ Screenshots: `eval/results/ui_1366x768.png`, `ui_1920x1080.png`, and the three
 certificate states.
 
 The demo path is **Model 2 → Model 7 → Model 5**. **Demo mode** runs all three
-and leaves the last report open. The serial headless run took **67.9 s** for the
-three audits (27.7 s, 17.5 s, 22.6 s), under the 60-second-per-audit budget.
+and leaves the last report open. The latest serial headless run took **75.6 s**
+for the three audits (30.2 s, 24.2 s, 21.1 s), and an earlier run took 67.9 s;
+every audit stays under the 60-second budget.
 
 Known cosmetic issue: Streamlit 1.66.1 prints a deprecation warning for
 `st.components.v1.html`. The component is required by the brief and still
@@ -545,6 +547,49 @@ the model scores income only. This is the intended behaviour, not a miss: the
 pre-registration allowed Model 7 to produce up to three observational candidates
 as long as the Skeptic rejected them.
 
+### Defects found in the final review, and fixed
+
+The final pass re-ran the live audits and the headless demo, then reviewed the
+code paths that the demo does not exercise. These were real defects, not
+cosmetic changes:
+
+- **Port override did not reach the dashboard.** `run.ps1` / `run.sh` accepted
+  `FAIRLENS_API_PORT`, but the UI still defaulted to `config.yaml`'s 8010. A
+  non-default port started a sandbox the dashboard could not reach. The
+  launchers now export `FAIRLENS_API_URL`, the UI reads it, and a regression
+  test checks it.
+- **Certificates hashed the wrong config.** Sign-off hashed the global config at
+  signing time. It now hashes `report.config`, the config the audit actually
+  ran with, so a sensitivity audit cannot produce a certificate whose
+  thresholds disagree with its findings.
+- **Demo inspection showed the wrong log.** "Open demo result" changed the
+  report but left the live log and pipeline strip on the last model (5). The
+  dashboard now stores events per demo model and restores the selected one.
+- **A budget-breaking offset could be called compliant.** `recommend` fell back
+  to the curve's first point when no offset fit the accuracy budget, while
+  keeping a rationale that claimed budget compliance. It now returns
+  `within_budget: False`, shows the smallest tested offset, and says plainly
+  that no tested point fits. This state is only reachable with a negative budget
+  or a malformed curve.
+- **Template trimming could delete the limitations.** The old loop popped from a
+  fixed index and could remove the rejected/immaterial disclosure or the
+  limitations paragraph. It now removes only per-finding "For ..." sentences,
+  and a regression test asserts the disclosure and limitations survive.
+- **The reporter had a fabricated count fallback.** An `or 12` turned a measured
+  zero cell count into a made-up 12. It was removed; the payload now reports the
+  measured value.
+- **Model 6 documentation was wrong.** The frozen `expected_findings.md` says
+  "independent per-request noise"; the implementation draws deterministic
+  per-applicant noise (independent across twins, stable across retries). The
+  frozen pre-registration was not edited. The implementation and the difference
+  are recorded in `DECISIONS.md` D-016, `SPEC.md`, and `config.yaml`.
+
+The regression suite is now **84 passing tests** (up from 80), and the latest
+headless demo completed all three audits plus the certificate/tamper/unreachable
+checks in **75.6 s**. The certificate chain still cannot detect deletion of
+trailing rows without an external head hash; that is a documented design limit,
+not a fixed defect.
+
 ### Method limits
 
 - **Twins are approximations.** They hold observed fields fixed, not unobserved
@@ -570,8 +615,9 @@ as long as the Skeptic rejected them.
 - **The number check is syntactic.** It proves the prose matches the JSON, not
   that the JSON is the right analysis.
 - **The certificate is tamper-evident, not signed.** Anyone with write access
-  can recompute the chain. Digital signatures and an append-only external
-  anchor are future work.
+  can recompute the chain. It also cannot detect deletion of trailing records
+  without an external head hash or append-only log. Digital signatures and such
+  an anchor are future work.
 - **Synthetic data.** Pincodes, names, and income distributions are invented.
   No claim is made about real Indian populations or a real lender.
 - **No authentication or multi-user store.** The dashboard is a local demo; the

@@ -126,6 +126,22 @@ def test_build_payload_does_not_leak_planted_penalties():
     assert payload["summary"]["kept"] == 1
 
 
+def test_template_trimming_keeps_limitations_and_disclosure():
+    report = _report()
+    payload = build_payload(report)
+    full = template_narrative(payload, 10_000)
+    budget = len(full.split()) - 1
+    trimmed = template_narrative(payload, budget)
+
+    assert len(trimmed.split()) <= budget
+    assert trimmed.count("For ") < full.count("For ")
+    # The rejected/immaterial disclosure and the limitations must survive.
+    assert "every candidate remains in the report" in trimmed
+    assert "not proof of intent" in trimmed
+    assert "A named human auditor must approve" in trimmed
+    assert check_numbers(trimmed, payload)["passed"]
+
+
 def test_generate_narrative_template_without_api_key(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     payload = build_payload(_report())

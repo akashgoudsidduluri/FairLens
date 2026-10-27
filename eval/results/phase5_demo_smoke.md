@@ -5,11 +5,11 @@ The test is functional; it does not retune any pre-registered threshold.
 
 | Model | Kept | Runtime | Narrative | Number check | Functional | Notes |
 |---|---|---|---|---|---|---|
-| 2 | 6 | 27.7s | template | PASS | PASS | none |
-| 7 | 0 | 17.5s | template | PASS | PASS | none |
-| 5 | 2 | 22.6s | template | PASS | PASS | KNOWN PRE-REGISTRATION MISS: single-attribute gender was also kept (net 0.0265). Reported, not retuned; see DECISIONS.md D-009.; expected single gender immaterial; observed kept (D-009 miss) |
+| 2 | 6 | 30.2s | template | PASS | PASS | none |
+| 7 | 0 | 24.2s | template | PASS | PASS | none |
+| 5 | 2 | 21.1s | template | PASS | PASS | KNOWN PRE-REGISTRATION MISS: single-attribute gender was also kept (net 0.0265). Reported, not retuned; see DECISIONS.md D-009.; expected single gender immaterial; observed kept (D-009 miss) |
 
-Total audit time: **67.9s**. Every individual audit is under the 60-second demo budget.
+Total audit time: **75.6s**. Every individual audit is under the 60-second demo budget.
 
 ## Human gate and certificate
 

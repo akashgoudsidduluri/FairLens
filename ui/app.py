@@ -13,6 +13,7 @@ verification flow.
 from __future__ import annotations
 
 import html
+import os
 import sys
 from pathlib import Path
 from typing import Any, Iterable, Sequence
@@ -43,6 +44,19 @@ from ui.plotting import PLOTLY_CONFIG, heatmap_figure, mitigation_figure
 
 CONFIG = load_config()
 DB_PATH = CONFIG["certificate"]["db_path"]
+
+
+def _default_api_url() -> str:
+    """Launcher-provided URL, falling back to the frozen config default.
+
+    run.ps1 / run.sh export the port they actually started the sandbox on.
+    Without this the dashboard would keep pointing at 8010 when the launcher
+    used another port, and the advertised FAIRLENS_API_PORT override would fail.
+    """
+
+    return os.environ.get("FAIRLENS_API_URL") or str(CONFIG["api"]["base_url"])
+
+
 init_db(DB_PATH)
 
 DEMO_MODELS = (2, 7, 5)
@@ -71,6 +85,7 @@ def _init_state() -> None:
         "verify_state": None,
         "demo_reports": {},
         "demo_summary": [],
+        "demo_events": {},
         "approver_name": "",
         "confirm_tamper": False,
     }
@@ -281,7 +296,7 @@ def _approve() -> None:
         )
         return
     try:
-        payload = build_certificate_payload(report, CONFIG, name, "approve")
+        payload = build_certificate_payload(report, report.config, name, "approve")
         certificate = issue(payload, name, "approve", DB_PATH)
     except Exception as exc:  # noqa: BLE001
         _set_notice("signoff_notice", "error", f"Certificate could not be issued: {exc}")
@@ -309,7 +324,7 @@ def _reject() -> None:
         )
         return
     try:
-        payload = build_certificate_payload(report, CONFIG, name, "reject")
+        payload = build_certificate_payload(report, report.config, name, "reject")
         certificate = issue(payload, name, "reject", DB_PATH)
     except Exception as exc:  # noqa: BLE001
         _set_notice("signoff_notice", "error", f"Decision could not be logged: {exc}")
@@ -394,6 +409,12 @@ def _open_demo_report() -> None:
     st.session_state.last_cert = None
     st.session_state.audit_error = None
     st.session_state.signoff_notice = None
+    # Keep the log and pipeline consistent with the report being inspected;
+    # otherwise they would still describe the last model in the demo run.
+    st.session_state.events = list(
+        (st.session_state.get("demo_events") or {}).get(selected, [])
+    )
+    st.session_state.running = False
 
 
 # --------------------------------------------------------------------------- audit runner
@@ -409,20 +430,21 @@ def _run_audit_models(
     st.session_state.audit_error = None
     display_events: list[AgentEvent] = []
     reports: list[tuple[int, AuditReport]] = []
+    per_model_events: dict[int, list[AgentEvent]] = {}
     error_message: str | None = None
 
     for position, model_id in enumerate(model_ids):
-        if demo:
-            display_events.append(
-                AgentEvent(
-                    agent="system",
-                    message=(
-                        f"Demo run {position + 1}/{len(model_ids)} · "
-                        f"Model {model_id} · seed {CONFIG['seed']}"
-                    ),
-                )
-            )
         current_events: list[AgentEvent] = []
+        if demo:
+            banner = AgentEvent(
+                agent="system",
+                message=(
+                    f"Demo run {position + 1}/{len(model_ids)} · "
+                    f"Model {model_id} · seed {CONFIG['seed']}"
+                ),
+            )
+            display_events.append(banner)
+            current_events.append(banner)
         report: AuditReport | None = None
         error: Exception | None = None
         try:
@@ -460,6 +482,7 @@ def _run_audit_models(
 
         if report is not None:
             reports.append((model_id, report))
+            per_model_events[model_id] = list(current_events)
             st.session_state.report = report
             pipeline_placeholder.markdown(
                 ui_components.pipeline_strip(
@@ -498,6 +521,7 @@ def _run_audit_models(
         st.session_state.report = reports[-1][1]
     if demo:
         st.session_state.demo_reports = {model: report for model, report in reports}
+        st.session_state.demo_events = per_model_events
         st.session_state.demo_summary = [
             {
                 "model_id": model,
@@ -571,7 +595,7 @@ st.markdown(
 with st.expander("Audit protocol and connection", expanded=False):
     api_url = st.text_input(
         "Sandbox API URL",
-        value=str(CONFIG["api"]["base_url"]),
+        value=_default_api_url(),
         key="api_url",
     )
     st.markdown(
@@ -600,6 +624,7 @@ if start_clicked or demo_clicked:
     st.session_state.verify_state = None
     st.session_state.demo_reports = {}
     st.session_state.demo_summary = []
+    st.session_state.demo_events = {}
 
 audit_tab, certificate_tab = st.tabs(["Audit", "Certificates"])
 
@@ -914,6 +939,12 @@ with audit_tab:
                 rec_loss.metric(
                     "Accuracy loss", _pct(recommendation["accuracy_loss"])
                 )
+                if not recommendation.get("within_budget", True):
+                    st.warning(
+                        "No tested offset keeps accuracy loss inside this budget. "
+                        "The metrics show the smallest tested offset; raise the "
+                        "budget to see a compliant offset."
+                    )
                 st.markdown(
                     f'<p class="fl-caption">{html.escape(recommendation["rationale"])} '
                     "Negative accuracy loss means accuracy improved. Both series share "

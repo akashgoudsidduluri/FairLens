@@ -48,7 +48,8 @@ models:
   penalty_pincode: 120.0
   penalty_name: 120.0
   penalty_intersectional: 240.0
-  # Model 6: per-request noise, deterministically seeded from request+seed
+  # Model 6: deterministic per-applicant Gaussian noise from noise_seed +
+  # applicant payload (independent across twins, stable across retries)
   noise_sd: 70.0
   noise_seed: 6
   # Model 7: income-only score

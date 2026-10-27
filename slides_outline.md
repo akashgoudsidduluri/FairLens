@@ -176,7 +176,7 @@ Artifact: the full report and certificate chain.
 | Model 2 mitigation at 2% budget | offset +80, gap 4.58%, Δaccuracy −1.30% |
 | Model 5 hotspot (seed 42) | 0.6320, ~6,320 per 10,000 |
 | Model 5 known miss | single gender 0.0265, kept |
-| Demo runtime | 67.9 s for Models 2, 7, 5 |
+| Demo runtime | 67.9 s / 75.6 s for Models 2, 7, 5 |
 
 Use the exact values in `eval/results/summary.md` if they differ from this table;
 the summary is generated from the final run.

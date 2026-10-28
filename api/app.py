@@ -31,6 +31,13 @@ from trust.certificate import (
 
 from api.jobs import AuditJobManager
 from api.catalog import build_catalog, check_endpoint
+from api.replays import (
+    export_replay,
+    find_replay,
+    list_replays,
+    load_replay,
+    replay_directory,
+)
 from api.schemas import (
     AuditCreateRequest,
     AuditCreated,
@@ -42,6 +49,9 @@ from api.schemas import (
     EndpointCheckRequest,
     EndpointCheckResponse,
     HealthResponse,
+    ReplayFile,
+    ReplayList,
+    ReplaySummary,
     ServiceMeta,
     StreamEvent,
     TamperRequest,
@@ -68,8 +78,14 @@ def _sse(event: str, data: dict[str, Any], event_id: int | None = None) -> str:
     return "\n".join(lines) + "\n\n"
 
 
-def _record_response(record: dict[str, Any]) -> AuditRecord:
+def _record_response(
+    record: dict[str, Any], replay_dir: Any = None
+) -> AuditRecord:
     decision = record.get("decision")
+    replay_id = record.get("replay_id")
+    if replay_id is None and replay_dir is not None and record.get("status") == "completed":
+        match = find_replay(replay_dir, record)
+        replay_id = match["id"] if match else None
     return AuditRecord(
         id=record["id"],
         status=record["status"],
@@ -91,6 +107,7 @@ def _record_response(record: dict[str, Any]) -> AuditRecord:
         event_count=int(record.get("event_count", 0)),
         last_seq=int(record.get("last_seq", 0)),
         decision=DecisionInfo(**decision) if decision else None,
+        replay_id=replay_id,
     )
 
 
@@ -108,15 +125,26 @@ def create_app(
     config: dict[str, Any] | None = None,
     store: AuditStore | None = None,
     audit_fn: Callable[..., Any] = run_audit,
+    replay_dir: Any = None,
+    export_replays: bool | None = None,
 ) -> FastAPI:
     cfg = config or load_config()
     audit_store = store or create_store(cfg)
     cert_db = repo_path(cfg["certificate"]["db_path"])
+    replays_path = replay_dir or replay_directory(cfg)
+    record_replays = (
+        export_replays if export_replays is not None else replay_dir is not None
+    )
+
+    def record_replay(audit_id: str, report: dict[str, Any]) -> None:
+        export_replay(audit_store, audit_id, replays_path, report=report)
+
     manager = AuditJobManager(
         audit_store,
         cfg,
         audit_fn=audit_fn,
         max_workers=int(cfg.get("service", {}).get("max_workers", 2)),
+        on_complete=record_replay if record_replays else None,
     )
     poll_seconds = float(cfg.get("service", {}).get("sse_poll_seconds", 0.1))
 
@@ -283,7 +311,7 @@ def create_app(
         record = audit_store.get_audit(audit_id)
         if record is None:
             raise HTTPException(status_code=404, detail="audit not found")
-        return _record_response(record)
+        return _record_response(record, replays_path)
 
     @app.get(
         "/audits/{audit_id}/events",
@@ -413,8 +441,32 @@ def create_app(
         if updated is None:
             raise HTTPException(status_code=404, detail="audit not found")
         return DecisionResponse(
-            audit=_record_response(updated), certificate=certificate
+            audit=_record_response(updated, replays_path), certificate=certificate
         )
+
+    @app.get("/replays", response_model=ReplayList, tags=["replays"])
+    def replays() -> ReplayList:
+        """Recently recorded audits, newest first. No target is contacted."""
+
+        summaries = [
+            ReplaySummary.model_validate(item)
+            for item in list_replays(replays_path)
+        ]
+        summaries.sort(
+            key=lambda item: item.recorded_at or item.id, reverse=True
+        )
+        return ReplayList(replays=summaries, count=len(summaries))
+
+    @app.get(
+        "/replays/{replay_id}", response_model=ReplayFile, tags=["replays"]
+    )
+    def get_replay(replay_id: str) -> ReplayFile:
+        """The full event stream and report of one recorded audit."""
+
+        payload = load_replay(replays_path, replay_id)
+        if payload is None:
+            raise HTTPException(status_code=404, detail="replay not found")
+        return ReplayFile.model_validate(payload)
 
     @app.get(
         "/certificates", response_model=CertificateList, tags=["certificates"]
@@ -457,4 +509,4 @@ def create_app(
     return app
 
 
-app = create_app()
+app = create_app(replay_dir=replay_directory())

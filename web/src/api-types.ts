@@ -45,6 +45,7 @@ export interface AuditRecord {
   event_count?: number;
   last_seq?: number;
   decision?: DecisionInfo | null;
+  replay_id?: string | null;
 }
 
 export interface AuditReport {
@@ -167,6 +168,35 @@ export interface ProbeEvent {
   ci_high_running: number;
   ci_method?: string;
   timestamp?: string;
+}
+
+export interface ReplayFile {
+  version: number;
+  id: string;
+  label: string;
+  recorded_at?: string | null;
+  source_audit_id?: string | null;
+  audit: AuditRecord;
+  events: StreamEvent[];
+}
+
+export interface ReplayList {
+  replays: ReplaySummary[];
+  count: number;
+}
+
+export interface ReplaySummary {
+  id: string;
+  label: string;
+  target?: string | null;
+  model_id?: number | null;
+  seed?: number | null;
+  recorded_at?: string | null;
+  duration_ms?: number;
+  event_count?: number;
+  probe_count?: number;
+  findings?: number;
+  source_audit_id?: string | null;
 }
 
 export interface ServiceMeta {

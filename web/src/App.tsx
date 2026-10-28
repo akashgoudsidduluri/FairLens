@@ -13,6 +13,9 @@ const Landing = React.lazy(() =>
 const Arena = React.lazy(() =>
   import("@/pages/Arena").then((module) => ({ default: module.Arena })),
 );
+const Replay = React.lazy(() =>
+  import("@/pages/Replay").then((module) => ({ default: module.Replay })),
+);
 const Certificates = React.lazy(() =>
   import("@/pages/Certificates").then((module) => ({
     default: module.Certificates,
@@ -58,6 +61,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/audit/:auditId" element={<Arena />} />
+              <Route path="/replay/:replayId" element={<Replay />} />
               <Route path="/certificates" element={<Certificates />} />
             </Routes>
           </React.Suspense>

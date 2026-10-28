@@ -182,7 +182,8 @@ function renderPanel(
             />
           }
         />
-        <Route path="/audit/new-run" element={<p>replayed audit</p>} />
+        <Route path="/audit/new-run" element={<p>rerun audit</p>} />
+        <Route path="/replay/:replayId" element={<p>replay page</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -316,7 +317,7 @@ describe("ReportPanel", () => {
     );
   });
 
-  it("replays a completed sandbox audit against the same target and seed", async () => {
+  it("runs a completed sandbox audit again against the same target and seed", async () => {
     const user = userEvent.setup();
     startAudit.mockResolvedValue({
       id: "new-run",
@@ -325,7 +326,7 @@ describe("ReportPanel", () => {
     });
     renderPanel();
 
-    await user.click(screen.getByRole("button", { name: /replay audit/i }));
+    await user.click(screen.getByRole("button", { name: /run again/i }));
 
     expect(startAudit).toHaveBeenCalledWith({
       model_id: 2,
@@ -334,19 +335,40 @@ describe("ReportPanel", () => {
       include_mitigation: false,
       include_narrative: true,
     });
-    expect(await screen.findByText("replayed audit")).toBeInTheDocument();
+    expect(await screen.findByText("rerun audit")).toBeInTheDocument();
   });
 
-  it("refuses to replay a connected endpoint, which is not stored", () => {
+  it("refuses to run a connected endpoint again, which is not stored", () => {
     renderPanel({
       record: record({ target: "inline:connected-endpoint" }),
     });
 
-    const replay = screen.getByRole("button", { name: /replay audit/i });
-    expect(replay).toBeDisabled();
-    expect(replay).toHaveAttribute(
+    const again = screen.getByRole("button", { name: /run again/i });
+    expect(again).toBeDisabled();
+    expect(again).toHaveAttribute(
       "title",
-      "A connected endpoint is not stored, so it cannot be replayed",
+      "A connected endpoint is not stored, so it cannot be run again",
     );
+  });
+
+  it("opens the recording instead of starting a job when Replay is clicked", async () => {
+    const user = userEvent.setup();
+    renderPanel({ record: record({ replay_id: "sandbox-2-seed-42" }) });
+
+    await user.click(screen.getByRole("button", { name: /^replay$/i }));
+
+    expect(startAudit).not.toHaveBeenCalled();
+    expect(await screen.findByText("replay page")).toBeInTheDocument();
+  });
+
+  it("disables Replay when no recording exists and keeps sign-off read-only in replay mode", () => {
+    renderPanel({ mode: "replay" });
+
+    expect(screen.queryByRole("button", { name: /^replay$/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/read-only recording/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/approver name/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /approve & issue certificate/i }),
+    ).not.toBeInTheDocument();
   });
 });

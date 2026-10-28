@@ -15,6 +15,8 @@ import type {
   EndpointCheckRequest,
   EndpointCheckResponse,
   HealthResponse,
+  ReplayFile,
+  ReplayList,
   ServiceMeta,
   TamperResponse,
   TargetCatalog,
@@ -80,6 +82,13 @@ export const api = {
     }),
 
   getAudit: (auditId: string) => request<AuditRecord>(`/audits/${auditId}`),
+
+  /** Recorded audits, newest first. Served from files; no target is called. */
+  getReplays: () => request<ReplayList>("/replays"),
+
+  /** One full recording: event stream plus the report stored with it. */
+  getReplay: (replayId: string) =>
+    request<ReplayFile>(`/replays/${encodeURIComponent(replayId)}`),
 
   decide: (auditId: string, approver: string, decision: "approve" | "reject") =>
     request<DecisionResponse>(`/audits/${auditId}/decision`, {

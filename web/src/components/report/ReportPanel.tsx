@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  Clapperboard,
   FileCheck2,
   Gauge,
   Hash,
@@ -401,9 +402,11 @@ function ImpactPanel({ impact }: { impact: ImpactEstimate[] }) {
 function SignOff({
   record,
   onDecided,
+  readOnly = false,
 }: {
   record: AuditRecord;
   onDecided?: (record: AuditRecord) => void;
+  readOnly?: boolean;
 }) {
   const [approver, setApprover] = React.useState("");
   const [busy, setBusy] = React.useState<"approve" | "reject" | null>(null);
@@ -451,8 +454,21 @@ function SignOff({
             {decision.decided_at}
           </p>
           <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-            A named human signed this decision. The certificate is
-            tamper-evident; it does not prove authorship.
+            {readOnly
+              ? "This decision was part of the recording. A replay cannot change it or issue a new certificate."
+              : "A named human signed this decision. The certificate is tamper-evident; it does not prove authorship."}
+          </p>
+        </div>
+      ) : readOnly ? (
+        <div className="mt-3 rounded-lg border border-dashed border-line/70 px-3 py-4">
+          <Badge variant="outline" className="gap-1">
+            <Clapperboard className="h-3 w-3" aria-hidden="true" />
+            read-only recording
+          </Badge>
+          <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+            Sign-off is disabled while replaying a recording. Nothing here can
+            write a decision or issue a certificate. Use{" "}
+            <span className="text-ink">Run again</span> to execute a live audit.
           </p>
         </div>
       ) : (
@@ -563,13 +579,20 @@ function Narrative({ report }: { report: AuditReport }) {
   );
 }
 
-function ReplayButton({ record }: { record: AuditRecord }) {
+function ReportActions({
+  record,
+  mode,
+}: {
+  record: AuditRecord;
+  mode: "live" | "replay";
+}) {
   const navigate = useNavigate();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const replayable = Boolean(record.target) && !record.target?.startsWith("inline:");
+  const recording = record.replay_id;
 
-  const replay = async () => {
+  const runAgain = async () => {
     if (!replayable || busy) return;
     setBusy(true);
     setError(null);
@@ -583,31 +606,49 @@ function ReplayButton({ record }: { record: AuditRecord }) {
       });
       navigate(`/audit/${created.id}`);
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.detail : "could not replay the audit");
+      setError(cause instanceof ApiError ? cause.detail : "could not start the audit");
       setBusy(false);
     }
   };
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={replay}
-        disabled={!replayable || busy}
-        title={
-          replayable
-            ? "Start a new run against the same target and seed"
-            : "A connected endpoint is not stored, so it cannot be replayed"
-        }
-      >
-        {busy ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-        ) : (
-          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {mode === "live" && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => recording && navigate(`/replay/${recording}`)}
+            disabled={!recording}
+            title={
+              recording
+                ? "Play the recorded event stream and report. No model is called."
+                : "No recording is available for this audit"
+            }
+          >
+            <Clapperboard className="h-3.5 w-3.5" aria-hidden="true" />
+            Replay
+          </Button>
         )}
-        Replay audit
-      </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={runAgain}
+          disabled={!replayable || busy}
+          title={
+            replayable
+              ? "Start a new live run against the same target and seed"
+              : "A connected endpoint is not stored, so it cannot be run again"
+          }
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
+          Run again
+        </Button>
+      </div>
       {error && (
         <p role="alert" className="max-w-[240px] text-right text-[10px] text-danger">
           {error}
@@ -621,6 +662,7 @@ export interface ReportPanelProps {
   record: AuditRecord;
   report: AuditReport;
   agentEvents: AgentEvent[];
+  mode?: "live" | "replay";
   onDecided?: (record: AuditRecord) => void;
 }
 
@@ -628,6 +670,7 @@ export function ReportPanel({
   record,
   report,
   agentEvents,
+  mode = "live",
   onDecided,
 }: ReportPanelProps) {
   const findings = report.findings ?? [];
@@ -665,7 +708,7 @@ export function ReportPanel({
             <Hash className="h-3 w-3" aria-hidden="true" />
             certificates
           </Link>
-          <ReplayButton record={record} />
+          <ReportActions record={record} mode={mode} />
         </div>
       </div>
 
@@ -689,7 +732,7 @@ export function ReportPanel({
         </div>
         <div className="space-y-4">
           <ImpactPanel impact={report.impact ?? []} />
-          <SignOff record={record} onDecided={onDecided} />
+          <SignOff record={record} onDecided={onDecided} readOnly={mode === "replay"} />
         </div>
       </div>
 

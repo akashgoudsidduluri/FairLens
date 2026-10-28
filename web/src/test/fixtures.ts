@@ -1,9 +1,12 @@
 import type {
   AgentEvent,
+  AuditRecord,
   AuditReport,
   Finding,
   ProbeEvent,
+  ReplayFile,
   ServiceMeta,
+  StreamEvent,
   TargetCard,
   TargetCatalog,
 } from "@/api-types";
@@ -197,6 +200,44 @@ export function makeMeta(overrides: Partial<ServiceMeta> = {}): ServiceMeta {
     sequential_enabled: false,
     sequential_min_pairs: 1000,
     sequential_check_every: 200,
+    ...overrides,
+  };
+}
+
+export function makeRecord(overrides: Partial<AuditRecord> = {}): AuditRecord {
+  return {
+    id: "source-audit",
+    status: "completed",
+    model_id: 2,
+    target: "sandbox:2",
+    api_url: "http://127.0.0.1:8010",
+    seed: 42,
+    include_mitigation: false,
+    include_narrative: false,
+    created_at: "2026-01-01T00:00:00Z",
+    started_at: "2026-01-01T00:00:00Z",
+    completed_at: "2026-01-01T00:00:10Z",
+    result: makeReport({ findings: [], narrative: "" }),
+    ...overrides,
+  };
+}
+
+export function makeReplay(overrides: Partial<ReplayFile> = {}): ReplayFile {
+  const events: StreamEvent[] = [
+    { seq: 1, kind: "agent", data: makeAgent({ message: "plan" }) },
+    { seq: 2, kind: "probe", data: makeProbe({ pair_index: 0 }) },
+    { seq: 3, kind: "agent", data: makeAgent({ message: "testing" }) },
+    { seq: 4, kind: "probe", data: makeProbe({ pair_index: 1 }) },
+    { seq: 5, kind: "probe", data: makeProbe({ pair_index: 2 }) },
+  ];
+  return {
+    version: 1,
+    id: "sandbox-2-seed-42",
+    label: "Validation model 2",
+    recorded_at: "2026-01-01T00:00:10Z",
+    source_audit_id: "source-audit",
+    audit: makeRecord(),
+    events,
     ...overrides,
   };
 }

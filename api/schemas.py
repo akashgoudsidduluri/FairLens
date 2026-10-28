@@ -100,6 +100,43 @@ class AuditRecord(ServiceModel):
     event_count: int = 0
     last_seq: int = 0
     decision: DecisionInfo | None = None
+    replay_id: str | None = Field(
+        default=None,
+        description="Recorded replay that matches this audit, if one exists.",
+    )
+
+
+class ReplaySummary(ServiceModel):
+    """One recorded audit, without the frames."""
+
+    id: str
+    label: str
+    target: str | None = None
+    model_id: int | None = None
+    seed: int | None = None
+    recorded_at: datetime | None = None
+    duration_ms: int = 0
+    event_count: int = 0
+    probe_count: int = 0
+    findings: int = 0
+    source_audit_id: str | None = None
+
+
+class ReplayList(ServiceModel):
+    replays: list[ReplaySummary]
+    count: int
+
+
+class ReplayFile(ServiceModel):
+    """The full recording served to the replay player."""
+
+    version: int
+    id: str
+    label: str
+    recorded_at: datetime | None = None
+    source_audit_id: str | None = None
+    audit: AuditRecord
+    events: list[StreamEvent]
 
 
 class DecisionResponse(ServiceModel):

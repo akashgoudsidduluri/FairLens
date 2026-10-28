@@ -30,10 +30,12 @@ class AuditJobManager:
         *,
         audit_fn: Callable[..., AuditGenerator] = run_audit,
         max_workers: int = 2,
+        on_complete: Callable[[str, dict[str, Any]], Any] | None = None,
     ) -> None:
         self.store = store
         self.config = config
         self.audit_fn = audit_fn
+        self.on_complete = on_complete
         self._executor = ThreadPoolExecutor(
             max_workers=max(1, int(max_workers)),
             thread_name_prefix="fairlens-audit",
@@ -110,7 +112,17 @@ class AuditJobManager:
                 )
             if report is None:
                 raise RuntimeError("audit generator returned no report")
-            self.store.complete_audit(audit_id, report.model_dump(mode="json"))
+            report_json = report.model_dump(mode="json")
+            if self.on_complete is not None:
+                try:
+                    # Record first, then publish "completed": a reader must never
+                    # observe a completed audit whose replay file is missing.
+                    self.on_complete(audit_id, report_json)
+                except Exception:  # noqa: BLE001
+                    # A recording failure must never turn a finished audit into a
+                    # failed one; the report is still persisted below.
+                    logger.exception("could not record replay for %s", audit_id)
+            self.store.complete_audit(audit_id, report_json)
         except Exception as exc:  # noqa: BLE001
             logger.exception("audit %s failed", audit_id)
             self.store.fail_audit(audit_id, f"{type(exc).__name__}: {exc}")

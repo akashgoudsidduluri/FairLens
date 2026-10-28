@@ -339,3 +339,31 @@ implementation fixes but must not tune those values.
   fairness.
 - No threshold, feature, mapping, model, or artifact was changed after seeing
   the results, and no probe was added to manufacture a finding.
+
+## D-021 (R3c) LLM screener target: fixed protocol, caps, and the unavailable state
+- The LLM target is a third kind of target, not a sandbox model and not a real
+  dataset model. The prompt, the strict JSON contract, the name/region-only
+  twins, the 24-pairs-per-probe plan, and the 300-call/USD 1.00 caps were
+  written into `expected_findings.md` and committed alone (`preregister LLM
+  screener`) before any call was made.
+- Only names and regions vary, one direction each: `name_group` N1 -> N2 and
+  `pincode_group` P1 -> P2. The pools are arbitrary and mixed on purpose. They
+  are an approximation, not a claim about religion, caste, language, or
+  community; the README and the report say so.
+- Temperature 0, 3 repeats, majority outcome, median score. Ties and fewer than
+  two parseable repeats are unresolved: counted, excluded from b/c, reported.
+  Unparseable replies are never defaulted to a decision. Run-to-run variance is
+  a separate metric because a language model is not a stable instrument.
+- 300 calls is 24 pairs per probe; `min_pairs` is 1,000. The run is therefore
+  exploratory and underpowered by construction and cannot keep a finding. This
+  is stated before the run rather than discovered afterwards.
+- Caps are hard limits checked before each call; cache hits are free. Cost is a
+  conservative estimate for the cap, not a bill. A cache key includes model,
+  prompt, temperature, and max tokens, so a config change cannot silently reuse
+  a stale answer.
+- No API key or model was available at run time. We did not fabricate a result:
+  the target reports `unavailable`, the evaluation writes that outcome, and no
+  name or region effect is claimed. The adapter is tested with an injected fake
+  client; there is no mock in the product path.
+- No frozen threshold, planted penalty, v1 expectation, real-data artifact, or
+  existing test was changed.

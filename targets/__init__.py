@@ -1,7 +1,8 @@
-"""Target adapters for FairLens v2.
+"""Target adapters for FairLens v2 and R3.
 
-``build_target`` accepts either ``sandbox:N`` (the validation adapters for the
-seven synthetic models) or a repository-relative path to a YAML adapter.
+``build_target`` accepts ``sandbox:N`` (the validation adapters for the seven
+synthetic models), ``llm:screener`` (the R3c LLM target), or a
+repository-relative path to a YAML adapter.
 """
 
 from __future__ import annotations
@@ -40,13 +41,19 @@ def build_target(
     base_url: str | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
     env: Mapping[str, str] | None = None,
-) -> HTTPTargetAdapter:
-    """Resolve ``sandbox:N`` or a YAML path into an adapter."""
+) -> TargetAdapter:
+    """Resolve ``sandbox:N``, ``llm:screener``, or a YAML path into an adapter."""
 
     cleaned = (reference or "").strip()
     if not cleaned:
         raise ValueError("target reference is empty")
     probe_cap = (config.get("targets") or {}).get("probe_cap")
+    if cleaned.lower().startswith("llm"):
+        from targets.llm.adapter import build_llm_target
+
+        adapter = build_llm_target(cleaned, config, env=env)
+        apply_probe_cap(adapter, probe_cap)
+        return adapter
     if cleaned.lower().startswith("sandbox:"):
         _, _, raw_model = cleaned.partition(":")
         try:
@@ -76,6 +83,7 @@ def build_target(
         adapter.base_url = base_url.rstrip("/")
     apply_probe_cap(adapter, probe_cap)
     return adapter
+
 
 def sandbox_model_id(reference: str | None) -> int | None:
     """Return N for ``sandbox:N``, otherwise ``None``."""

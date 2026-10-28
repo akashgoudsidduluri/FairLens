@@ -350,3 +350,58 @@ Observed result (seeds 1-5): the Adult model produced a significant but
 immaterial gender effect, net flip +0.0050 to +0.0120, in every seed; the credit
 model produced zero discordant pairs in 10,000 twins, so its result is an
 inconclusive null. Neither model produced a kept finding.
+
+## LLM screener target (R3c)
+`targets/llm/` adds a third kind of target: an Anthropic model asked to screen a
+loan applicant. Its decision rules were not written by us and are not visible.
+`build_target("llm:screener", config)` returns an in-process `LLMTargetAdapter`
+(no HTTP hop; each score is already an external call). `targets.build_target`
+dispatches references starting with `llm` before the sandbox and YAML branches.
+
+- `targets/llm/prompt.py`: one prompt per applicant with name, region, age,
+  gender, income, loan amount, credit score, and employment years. It asks for
+  exactly `{"approved": <bool>, "score": <0-1000>}`. `prompt_fields` is the
+  single source of the substituted values; `diff_fields` compares those values so
+  the twin check and the scored string cannot drift apart.
+- `targets/llm/names.py`: documented, deterministic Indian name and region pools.
+  Each name pool mixes several backgrounds; the pools are an approximation and
+  are explicitly not a claim about religion, caste, language, or community.
+- `targets/llm/parsing.py`: strict JSON. `approved` must be a JSON boolean,
+  `score` a finite number in 0..1000, keys exactly the two named keys. Anything
+  else returns `ParseFailure(reason)`; `NaN`/`Infinity` are rejected.
+- `targets/llm/client.py`: `CompletionClient` protocol plus `AnthropicClient`,
+  a thin wrapper over `anthropic.Anthropic().messages.create`. The key is passed
+  in memory from the environment; it is never persisted.
+- `targets/llm/cache.py`: one JSON file per prompt under `data/llm_cache/`
+  (git-ignored), keyed by a SHA-256 of model, prompt, temperature, and max tokens.
+  The file holds one slot per repeat, so reruns reproduce the same samples free.
+- `targets/llm/adapter.py`: `LLMTargetAdapter` with `supported_probes =
+  {name_group, pincode_group}`, `supports_mitigation = False`, repeat majority,
+  median score, parse-failure and unresolved counters, call cap, cost cap,
+  cache-hit counter, and an `unavailable` state. `validate_pair` requires exactly
+  `["name"]` or exactly `["region"]` to change and rejects identical prompts.
+- `targets/llm/variance.py`: per-pair repeat variance, pairs whose repeats
+  disagree, per-applicant disagreement, and mean repeat flip rate.
+
+### Protocol and caps
+Temperature 0; 3 repeats per applicant; a pair is flipped only on the majority of
+its parseable repeats; fewer than 2 parseable repeats or a tie is unresolved and
+excluded from b/c but counted and reported. Caps are checked before every call:
+300 API calls and USD 1.00 per audit (cache hits are free). Cost is estimated
+worst-case before the call and updated from provider usage after it; the price
+table is an estimate for the cap, not a billing record. Reaching a cap raises
+`LLMCapExceeded` and the evaluation records how far it got instead of shrinking
+the sample silently.
+
+### Evaluation (R3c)
+`eval/run_llm_eval.py` runs `name_group` N1 -> N2 and `pincode_group` P1 -> P2,
+24 pairs per probe, one direction each. Holm correction spans the two probes.
+It writes `eval/results/llm_screener.csv`, `llm_screener.md`, and a section
+appended to `real_models.md`, with b/c/net/CI/Holm p, impact per 10,000, the
+variance table, parse failures, unresolved pairs, calls, cost, and cache hits.
+The frozen `min_pairs = 1000` cannot be met under the cap, so every row is
+labelled exploratory and underpowered and no finding is kept: this is fixed in
+`expected_findings.md` before the run. A missing `ANTHROPIC_MODEL` or
+`ANTHROPIC_API_KEY` produces the reported `unavailable` outcome and no audit.
+No API key was present for the committed run, so the recorded result is
+`unavailable`; the adapter is covered by 33 tests that inject a fake client.

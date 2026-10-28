@@ -14,7 +14,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from auditor.pipeline import run_audit
@@ -30,6 +30,7 @@ from trust.certificate import (
 )
 
 from api.jobs import AuditJobManager
+from api.catalog import build_catalog, check_endpoint
 from api.schemas import (
     AuditCreateRequest,
     AuditCreated,
@@ -38,14 +39,20 @@ from api.schemas import (
     DecisionInfo,
     DecisionRequest,
     DecisionResponse,
+    EndpointCheckRequest,
+    EndpointCheckResponse,
     HealthResponse,
+    ServiceMeta,
     StreamEvent,
     TamperRequest,
     TamperResponse,
+    TargetCatalog,
     VerifyResponse,
 )
 from api.storage import AuditStore, create_store
 from targets import TargetError, build_target, sandbox_model_id
+from targets.base import apply_probe_cap
+from targets.http import HTTPTargetAdapter
 
 HEARTBEAT_SECONDS = 15.0
 
@@ -138,6 +145,44 @@ def create_app(
     def health() -> HealthResponse:
         return HealthResponse()
 
+    @app.get("/meta", response_model=ServiceMeta, tags=["service"])
+    def meta() -> ServiceMeta:
+        """Public config values used to label evidence in the UI."""
+
+        audit = cfg.get("audit") or {}
+        sequential = audit.get("sequential") or {}
+        return ServiceMeta(
+            materiality=float(audit.get("materiality", 0.02)),
+            alpha=float(audit.get("alpha", 0.05)),
+            ci_level=float(audit.get("ci_level", 0.95)),
+            bootstrap_iterations=int(audit.get("bootstrap_iterations", 4000)),
+            n_pairs=int(audit.get("n_pairs", 2000)),
+            probe_cap=int((cfg.get("targets") or {}).get("probe_cap", 100000)),
+            sequential_enabled=bool(sequential.get("enabled", False)),
+            sequential_min_pairs=int(sequential.get("min_pairs", 1000)),
+            sequential_check_every=int(sequential.get("check_every", 200)),
+        )
+
+    @app.get("/targets", response_model=TargetCatalog, tags=["targets"])
+    def targets() -> TargetCatalog:
+        """Model Library: the validation suite, real models, and the LLM target.
+
+        Capabilities and availability are read from the server, so the browser
+        cannot claim a target is available when it is not.
+        """
+
+        return build_catalog(cfg)
+
+    @app.post(
+        "/targets/check", response_model=EndpointCheckResponse, tags=["targets"]
+    )
+    def check_connected_endpoint(
+        request: EndpointCheckRequest,
+    ) -> EndpointCheckResponse:
+        """Server-side health check for the connected-endpoint form."""
+
+        return check_endpoint(request)
+
     @app.post(
         "/audits",
         response_model=AuditCreated,
@@ -152,7 +197,30 @@ def create_app(
         model_id = request.model_id
         target_ref = (request.target or "").strip() or None
         adapter = None
-        if target_ref is not None:
+        if request.target_spec is not None:
+            if target_ref is not None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="target and target_spec are mutually exclusive",
+                )
+            if not isinstance(request.target_spec, dict):
+                raise HTTPException(status_code=422, detail="target_spec must be an object")
+            if request.target_spec.get("family"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="inline specs may not declare a family",
+                )
+            try:
+                adapter = HTTPTargetAdapter(dict(request.target_spec))
+                apply_probe_cap(adapter, (cfg.get("targets") or {}).get("probe_cap"))
+            except (TargetError, ValueError, TypeError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"invalid connected endpoint: {exc}",
+                ) from exc
+            api_url = adapter.base_url
+            target_ref = f"inline:{adapter.name}"
+        elif target_ref is not None:
             try:
                 adapter = build_target(target_ref, cfg, base_url=request.api_url)
             except (TargetError, ValueError, FileNotFoundError) as exc:
@@ -223,13 +291,30 @@ def create_app(
             }
         },
     )
-    async def stream_events(audit_id: str) -> StreamingResponse:
+    async def stream_events(
+        audit_id: str,
+        last_event_id: int | None = Query(
+            default=None,
+            ge=0,
+            description="Resume after this sequence. The Last-Event-ID header also works.",
+        ),
+        last_event_id_header: str | None = Header(
+            default=None, alias="Last-Event-ID"
+        ),
+    ) -> StreamingResponse:
         record = await asyncio.to_thread(audit_store.get_audit, audit_id)
         if record is None:
             raise HTTPException(status_code=404, detail="audit not found")
 
+        resume_from = max(0, int(last_event_id or 0))
+        if last_event_id_header:
+            try:
+                resume_from = max(resume_from, int(last_event_id_header))
+            except ValueError:
+                pass
+
         async def frames() -> AsyncIterator[str]:
-            last_seq = 0
+            last_seq = resume_from
             last_emit = time.monotonic()
             yield "retry: 1000\n\n"
             while True:

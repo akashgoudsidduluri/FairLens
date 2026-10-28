@@ -16,6 +16,7 @@ export interface AuditCreateRequest {
   include_mitigation?: boolean;
   include_narrative?: boolean;
   sequential?: boolean | null;
+  target_spec?: Record<string, unknown> | null;
 }
 
 export interface AuditCreated {
@@ -87,6 +88,22 @@ export interface DecisionResponse {
   certificate: Certificate;
 }
 
+export interface EndpointCheckRequest {
+  base_url: string;
+  health_path?: string;
+  auth_env_var?: string | null;
+  auth_header?: string;
+  probe_cap?: number;
+}
+
+export interface EndpointCheckResponse {
+  ok: boolean;
+  status_code?: number | null;
+  detail: string;
+  latency_ms: number;
+  models?: string[];
+}
+
 export interface Evidence {
   n: number;
   b: number;
@@ -151,6 +168,18 @@ export interface ProbeEvent {
   timestamp?: string;
 }
 
+export interface ServiceMeta {
+  materiality: number;
+  alpha: number;
+  ci_level: number;
+  bootstrap_iterations: number;
+  n_pairs: number;
+  probe_cap: number;
+  sequential_enabled: boolean;
+  sequential_min_pairs: number;
+  sequential_check_every: number;
+}
+
 export interface StreamEvent {
   seq: number;
   kind: "agent" | "probe";
@@ -169,6 +198,32 @@ export interface TamperResponse {
   before: Record<string, unknown>;
   after: Record<string, unknown>;
   verification: VerifyResponse;
+}
+
+export interface TargetAvailability {
+  status: "available" | "unavailable" | "configured";
+  reason?: string;
+}
+
+export interface TargetCard {
+  id: string;
+  label: string;
+  kind: "validation" | "real" | "llm";
+  family: string;
+  target: string;
+  model_id: number;
+  description: string;
+  supported_probes: string[];
+  unsupported_probes: Record<string, string>;
+  availability: TargetAvailability;
+  planned_pairs: number;
+  probe_cap?: number | null;
+  metric?: string | null;
+}
+
+export interface TargetCatalog {
+  targets: TargetCard[];
+  service?: string;
 }
 
 export interface ValidationError {

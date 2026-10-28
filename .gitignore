@@ -6,3 +6,6 @@ __pycache__/
 data/*.db
 data/real/raw/
 data/llm_cache/
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo

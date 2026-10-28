@@ -41,6 +41,46 @@ audit:
     enabled: false
     min_pairs: 1000
     check_every: 200
+  # Generalized search (R5). Pre-registered before implementation in
+  # expected_findings.md. Off by default so suite A (Models 1-7) keeps the
+  # frozen v1 protocol; suite B audits opt in.
+  search:
+    enabled: false
+    max_context_depth: 3
+    correction: holm
+    family: all_cells
+    min_cell_size: 200
+    main_effect_pairs: 1000
+    cell_pairs: 200
+    confirmation_pairs: 400
+    discovery_confirmation_ratio: "80:20"
+    max_confirmation_candidates: 16
+    mde_assumed_discordance: 0.25
+    mde_power: 0.80
+    # Pre-registered deep panel. Depth-1 contexts are generated from the
+    # attribute registry; these cells add depth 2-3 without an exhaustive
+    # enumeration that cannot fit the probe cap.
+    deep_panel:
+      gender:
+        - {age: "45+", urban_rural: rural, name_group: N2}
+        - {pincode_group: P2, loan_amount: high}
+        - {age: "45+", pincode_group: P2}
+        - {income: low, loan_amount: high}
+      pincode_group:
+        - {gender: female, loan_amount: high}
+        - {age: "45+", gender: female}
+        - {name_group: N2, age: "45+"}
+        - {urban_rural: rural, loan_amount: high}
+      name_group:
+        - {age: "45+", pincode_group: P2}
+        - {gender: female, age: "45+"}
+        - {loan_amount: high, urban_rural: rural}
+        - {income: low, age: "45+"}
+      age:
+        - {name_group: N2, gender: female}
+        - {pincode_group: P2, urban_rural: rural}
+        - {loan_amount: high, gender: female}
+        - {income: low, name_group: N2}
 
 # Target adapters (v2). `probe_cap` is a hard ceiling on applicants sent to a
 # custom target in one audit; the sandbox validation adapters ship 100000.
@@ -73,6 +113,28 @@ models:
   income_only_slope: 160.0
   income_only_log_scale: 0.6
   income_only_reference_income: 600000.0
+
+# Suite B (R5) planted behaviour and control B. Written before any model 8-15
+# code existed; see expected_findings.md "Suite B and generalized search".
+# These are data-generating choices, never audit thresholds.
+suite_b:
+  age_55_threshold: 55
+  age_55_penalty: 140.0
+  pincode_female_penalty: 200.0
+  name_age45_penalty: 180.0
+  high_loan_threshold: 600000.0
+  pincode_high_loan_penalty: 200.0
+  female_45_rural_n2_penalty: 260.0
+  age_graded_start: 40
+  age_graded_per_year: 6.0
+  age_graded_cap: 180.0
+  proxy_low_loan_threshold: 200000.0
+  proxy_low_loan_penalty: 160.0
+  control_income_credit_weight: 40.0
+  control_burden_employment_weight: 30.0
+  control_age_credit_weight: 25.0
+  control_noise_sd: 60.0
+  control_noise_seed: 15
 
 mitigation:
   offset_min: 0

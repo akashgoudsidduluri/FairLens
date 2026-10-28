@@ -135,3 +135,159 @@ expectation is deliberately content-free.
   no API calls.
 - If `ANTHROPIC_API_KEY` is absent, the target reports "unavailable" and no
   audit is run. That is a valid reported outcome, not a failure to hide.
+
+## Suite B and generalized search (R5) — pre-registered before implementation
+
+**Status: FROZEN.** This section was written before any model 8-15 code, any
+attribute registry, and any generalized search code existed. It does not change
+the frozen suite A expectations above, the real-target sections, the LLM section,
+or any threshold in `config.yaml`. Suite A (Models 1-7) remains the validation
+suite and is reported with the old protocol as well as the new one; the old
+numbers are never replaced.
+
+### What is being generalized
+
+The old auditor conflates the **treatment** (the attribute flipped between twins)
+with the **context** (the subgroup in which the effect appears): it flips gender,
+pincode group, and name group, and its intersectional scan always flips gender.
+Suite B separates the two. A finding is described as
+
+> `treatment = <attribute> <level>` in `context = {<attribute>: <bin>, ...}`
+
+and a context may be empty (a main effect). Real bias can sit on age or loan
+amount, or in combinations, so the treatment set is wider and the context set
+includes legitimate attributes.
+
+### Attribute registry (committed in `config.yaml`)
+
+Every attribute has a type, bins, feasibility rule, and role. Roles:
+
+- **protected**: `gender`, `pincode_group`, `name_group`.
+- **proxy**: `age`, `urban_rural`.
+- **legitimate**: `income`, `credit_score`, `loan_amount`, `employment_years`.
+
+Legitimate attributes are used as context and in the income-matched check. They
+are **never reported as bias on their own**. `urban_rural` is context-only for
+treatment: a rural twin needs a rural pincode in the same pincode group, and P3
+has none, so an independently flipped urban/rural treatment would not be defined
+for the whole population. It stays a proxy context.
+
+Bins are fixed before implementation and are not data-dependent:
+
+| Attribute | Role | Bins |
+|---|---|---|
+| gender | protected | female, male |
+| age | proxy | <35, 35-44, 45+ (the frozen generator bands) |
+| pincode_group | protected | P1, P2, P3 |
+| name_group | protected | N1, N2, N3 |
+| urban_rural | proxy | urban, rural |
+| income | legitimate | low < 400,000; mid 400,000-900,000; high >= 900,000 |
+| credit_score | legitimate | low < 600; mid 600-750; high >= 750 |
+| loan_amount | legitimate | low < 200,000; mid 200,000-600,000; high >= 600,000 |
+| employment_years | legitimate | low < 3; mid 3-8; high >= 8 |
+
+Treatment attributes are `gender`, `age`, `pincode_group`, `name_group`. Age has
+two target levels (`35-44`, `45+`) against the `<35` comparison band; the other
+treatments have one direction (the lowest-approval group against the
+highest-approval group). Age twins move the twin into the target band while
+holding every other signal fixed, subject to `21 <= age <= 65` and
+`employment_years <= age - 21`. Pincode twins keep the same urban/rural tag;
+name twins keep the same gender; gender twins keep the same name group. These
+are the feasibility rules the registry validates.
+
+### Search protocol
+
+- **Context depth:** 1 to 3 other registered attributes. The context never
+  contains the treatment attribute; the treatment level is part of the finding
+  description.
+- **Discovery panel (Phase A):** every depth-1 context cell for each treatment
+  level, plus a pre-registered deep panel of four cells per treatment. The deep
+  panel is listed in `config.yaml` under `audit.search.deep_panel` and includes
+  the depth-3 cell `gender | age=45+, urban_rural=rural, name_group=N2`. The
+  panel is fixed before results; it is a lattice, not a claim of exhaustive
+  enumeration. The exhaustive count is computed and reported, and it exceeds
+  the probe cap, which is why the deep panel is the pre-registered subset.
+- **Minimum cell size:** 200 pairs (`audit.min_cell_size`, unchanged). Cells
+  below 200 are not tested; the plan reports how many were not testable.
+- **Discovery sample:** 1,000 pairs for a main effect and 200 pairs per context
+  cell (the minimum). Discovery is stratified per cell, so a rare cell is not
+  silently dropped. A treatment with several target levels (age) gets the full
+  context panel at its highest level and a main-effect probe at each lower
+  level.
+- **Correction:** **Holm** (the frozen v1 method), one family across **all**
+  discovery cells examined in the audit, including main effects and deep cells.
+- **Discovery/confirmation split:** **80:20**. Discovery is ~26,000 pairs;
+  roughly 6,500 pairs are reserved for confirmation at 400 fresh pairs per
+  candidate (at most 16 candidates, ranked by discovery net flip, ties by raw
+  p). A candidate that does not fit the reserve is reported as
+  `candidate_not_confirmed_budget`, never silently dropped.
+- **Phase B (confirmation):** fresh twins from a new seed stream, never the
+  discovery pairs. Only discovery candidates are confirmed. Confirmation
+  requires `p_raw < alpha / m` (the most conservative Holm threshold, with `m`
+  the number of discovery cells) in the same direction, net flip >= materiality.
+  Only confirmed cells can become findings. Confirmation pairs are reported
+  separately from discovery pairs.
+- **Minimum detectable effect (MDE):** for each cell size `n`, report
+  `MDE = (z_{1-alpha/2} + z_{power}) * sqrt(d / n)` with `power = 0.80` and the
+  pre-registered assumed discordance `d = 0.25`. This is a planning
+  approximation for a paired net-flip rate, not a post-hoc power claim. The
+  observed discordance is reported next to it.
+- **Probe cap:** the plan is costed before any request. The planned applicant
+  count (both twins, discovery + confirmation reserve + observational sample) is
+  printed up front and compared with the target's hard cap. If the plan exceeds
+  the cap, the audit fails loudly with the planned count; it never shrinks the
+  sample silently.
+- **Events:** both phases emit agent events (`search` agent) with cells
+  examined, candidates, confirmations, and MDE. Pair-level probe events are a
+  sample per cell so the live stream stays readable; all pairs still enter the
+  statistics.
+
+**No tuning after results.** No threshold, bin, penalty, panel cell, or seed is
+changed after seeing an audit result. Every miss and every false alarm is
+reported. Cells that were not testable, candidates that were not confirmed, and
+cells merged into a broader finding stay visible with their reasons.
+
+### Suite B planted models (penalties fixed in `config.yaml`)
+
+Models 8-14 are served by the same sandbox API (`?model=8..14`); Model 15 is
+clean control B. The API never says which model has which behaviour.
+
+| Model | Planted behaviour | Expected treatment | Expected context | Expected final status | Pass criteria |
+|---|---|---|---|---|---|
+| 8 | -140 if age >= 55 | `age`, level `45+` | none (main effect; effect concentrated in 55+) | **kept** age finding | Kept age finding at level 45+; net below 55+ near zero and net at 55+ material |
+| 9 | -200 if pincode P2 AND female | `pincode_group` P2 or `gender` female | `gender=female` or `pincode_group=P2` | **kept**, exactly one | One kept finding naming both attributes; the symmetric orientation may be the primary, but the duplicate is merged, not counted twice |
+| 10 | -180 if name N2 AND age 45+ | `name_group` N2 or `age` 45+ | `age_band=45+` or `name_group=N2` | **kept**, exactly one | One kept finding naming both attributes; no main-effect name finding kept on its own |
+| 11 | -200 if pincode P2 AND loan_amount high (>= 600,000) | `pincode_group` P2 | `loan_amount=high` | **kept** | Kept pincode finding in the high-loan context; low-loan cell not kept; loan_amount is never reported as bias on its own |
+| 12 | -260 if female AND 45+ AND rural AND name N2 | `gender` female or `age` 45+ | `age_band=45+, urban_rural=rural, name_group=N2` (or the symmetric orientation) | **kept**, exactly one, naming all four attributes | One kept finding naming gender/age/rural/name; the broader 45+ x rural cell is merged as secondary, not counted as a second kept finding |
+| 13 | Age-graded penalty `min(180, 6 * max(0, age - 40))`, not a single flag | `age` | none (main effect); gradient across target levels | **kept** age finding | Kept age finding; net at level 45+ exceeds net at level 35-44 by at least 0.05; a dose-response series is reported |
+| 14 | -160 if loan_amount low (< 200,000); no group term. Low loan amounts are more common for P2, women, and N2 because of the frozen income multipliers | none (no direct group term) | observational: P2, female, N2, low income | **no kept group finding**; candidates rejected as explained by a legitimate feature | 0 kept treatment findings; at least one rejected candidate whose reason cites the legitimate correlated feature (loan amount); the observational gaps are reported |
+| 15 | Clean control B: base score plus correlated legitimate interactions (income x credit, burden x employment, age x credit) and deterministic per-applicant noise; no group term | none | none | **no kept findings** | 0 kept; 0 false alarms after the Skeptic; false alarms before the Skeptic are reported |
+
+Model 14 is deliberately a *proxy* test: the auditor should see the group gaps
+and the legitimate feature behind them, and must not turn the feature into a
+group-bias claim.
+
+### Pre-registered false alarms for suite B
+
+- Models 8-13 may produce several confirmed cells for the same planted
+  interaction (for example the symmetric treatment orientation). These are
+  merged into one finding. The expected kept count is **one** per planted model,
+  except Model 8 and 13 (age main effect) and Model 12 (one merged finding).
+- Models 14 and 15 must have **0 kept findings**. Model 14 may have rejected
+  candidates; Model 15 may have false alarms before the Skeptic, which are
+  reported. Expected false alarms after the Skeptic for both: **0**.
+- A miss is any planted model whose expected treatment/context is not present in
+  the kept findings. A false alarm is any kept finding in Model 14 or 15, or any
+  kept finding naming a legitimate attribute as the treatment. Both are reported
+  without retuning.
+
+### Evaluation commitments
+
+Suite B and control B run on seeds 1-5 at the frozen materiality 0.02, and at
+0.01 and 0.03 in the sensitivity run. Suite A is rerun with the generalized
+protocol and reported side by side with the frozen old-protocol facts (Model 2
+keeps 6 findings in the old protocol, including the single gender finding and
+five intersectional cells). Old results are never replaced. The evaluation
+writes `eval/results/suite_b.csv` and `suite_b.md`, includes a Fairlearn
+comparison on the same data, and reports cells examined, candidates, confirmed,
+MDE by cell size, misses, false alarms before/after the Skeptic, and runtime.

@@ -6,6 +6,7 @@ import type { Certificate, VerifyResponse } from "@/api-types";
 import { CertificateCard } from "@/components/report/CertificateCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CardSkeleton, LoadingLine } from "@/components/ui/skeleton";
 import { ApiError, api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -143,9 +144,12 @@ export function Certificates() {
       </div>
 
       {records === null && !loadError && (
-        <div className="mt-6 flex items-center gap-2 font-mono text-[11px] text-muted">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" aria-hidden="true" />
-          reading the certificate store…
+        <div className="mt-6">
+          <LoadingLine>reading the certificate store…</LoadingLine>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <CardSkeleton lines={5} />
+            <CardSkeleton lines={5} />
+          </div>
         </div>
       )}
 

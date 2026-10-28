@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="FairLens">
+  <rect width="32" height="32" rx="8" fill="#0A0F14"/>
+  <rect x="1" y="1" width="30" height="30" rx="8" fill="none" stroke="#5EEAD4" stroke-opacity="0.45"/>
+  <circle cx="14.2" cy="14.2" r="6.2" fill="none" stroke="#5EEAD4" stroke-width="1.6"/>
+  <path d="M18.9 18.9L24.2 24.2" stroke="#5EEAD4" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="14.2" cy="14.2" r="1.6" fill="#5EEAD4"/>
+  <path d="M5 24.5H10.5" stroke="#5EEAD4" stroke-opacity="0.35" stroke-width="1.2"/>
+  <path d="M21.5 24.5H27" stroke="#5EEAD4" stroke-opacity="0.35" stroke-width="1.2"/>
+</svg>

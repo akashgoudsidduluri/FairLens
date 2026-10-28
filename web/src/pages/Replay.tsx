@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import type { AuditRecord } from "@/api-types";
 import { ArenaView } from "@/components/arena/ArenaView";
 import { ReplayControls } from "@/components/arena/ReplayControls";
+import { CardSkeleton, LoadingLine, Skeleton } from "@/components/ui/skeleton";
 import { useArenaMeta } from "@/hooks/useArenaMeta";
 import { useReplayPlayback } from "@/hooks/useReplayPlayback";
 import { ApiError, api } from "@/lib/api";
@@ -134,19 +135,17 @@ export function Replay() {
 function ReplayLoading() {
   return (
     <div className="mx-auto w-full max-w-[1500px] px-5 pb-20 pt-7">
-      <div className="h-3 w-20 animate-pulse rounded bg-line/60" />
-      <div className="mt-4 h-8 w-72 animate-pulse rounded bg-line/60" />
-      <div className="mt-2 h-3 w-96 max-w-full animate-pulse rounded bg-line/40" />
+      <Skeleton className="h-3 w-20" />
+      <Skeleton className="mt-4 h-8 w-72 max-w-full" />
+      <Skeleton className="mt-2 h-3 w-96 max-w-full" />
       <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(360px,1fr)]">
-        <div className="h-72 animate-pulse rounded-xl border border-line/60 bg-panel/40" />
+        <CardSkeleton lines={6} className="min-h-[288px]" />
         <div className="space-y-4">
-          <div className="h-40 animate-pulse rounded-xl border border-line/60 bg-panel/40" />
-          <div className="h-40 animate-pulse rounded-xl border border-line/60 bg-panel/40" />
+          <CardSkeleton lines={4} />
+          <CardSkeleton lines={3} />
         </div>
       </div>
-      <p className="mt-4 font-mono text-[10.5px] text-muted">
-        loading the recording…
-      </p>
+      <LoadingLine className="mt-4">loading the recording…</LoadingLine>
     </div>
   );
 }

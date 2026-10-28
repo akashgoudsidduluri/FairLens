@@ -1,5 +1,4 @@
 import * as React from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeftRight, Equal, Zap } from "lucide-react";
 
 import type { ProbeEvent } from "@/api-types";
@@ -38,7 +37,7 @@ function DecisionStamp({ approved }: { approved: boolean }) {
   return (
     <span
       className={cn(
-        "rotate-[-1.5deg] rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.16em]",
+        "shrink-0 rotate-[-1.5deg] whitespace-nowrap rounded border px-1.5 py-0.5 font-mono text-[9px] uppercase leading-none tracking-[0.16em]",
         approved
           ? "border-ok/45 bg-ok/[0.07] text-ok"
           : "border-danger/45 bg-danger/[0.07] text-danger",
@@ -124,20 +123,12 @@ function PairCard({ event }: { event: ProbeEvent }) {
   }, [flip]);
 
   return (
-    <motion.article
-      layout
+    <article
       data-testid="twin-pair"
       data-flip={flip ? "true" : "false"}
-      initial={{ opacity: 0, y: -16, scale: 0.985 }}
-      animate={{
-        opacity: !flip && settled ? 0.3 : 1,
-        y: 0,
-        scale: 1,
-      }}
-      exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.16 } }}
-      transition={{ type: "spring", stiffness: 260, damping: 26 }}
       className={cn(
-        "rounded-xl border p-3",
+        "rounded-xl border p-3 transition-opacity duration-500",
+        !flip && settled && "opacity-30",
         flip
           ? "border-danger/40 bg-danger/[0.035] shadow-[0_0_24px_rgba(251,113,133,0.08)] animate-flip"
           : "border-line/70 bg-raised/20",
@@ -188,7 +179,7 @@ function PairCard({ event }: { event: ProbeEvent }) {
           decision flipped.
         </p>
       )}
-    </motion.article>
+    </article>
   );
 }
 
@@ -199,7 +190,7 @@ export function TwinStream({ events }: { events: ProbeEvent[] }) {
   );
 
   return (
-    <section className="panel flex h-full flex-col p-4" aria-label="Twin stream">
+    <section className="panel flex flex-col p-4" aria-label="Twin stream">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="eyebrow">twin stream</p>
@@ -215,11 +206,9 @@ export function TwinStream({ events }: { events: ProbeEvent[] }) {
       </p>
 
       <div className="mt-3 min-h-[240px] flex-1 space-y-3">
-        <AnimatePresence initial={false}>
-          {visible.map((event) => (
-            <PairCard key={pairKey(event)} event={event} />
-          ))}
-        </AnimatePresence>
+        {visible.map((event) => (
+          <PairCard key={pairKey(event)} event={event} />
+        ))}
         {visible.length === 0 && (
           <div className="flex h-full min-h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-line/80 text-center">
             <p className="font-mono text-[11px] text-muted">

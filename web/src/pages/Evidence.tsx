@@ -5,7 +5,6 @@ import {
   BarChart3,
   CheckCircle2,
   FileText,
-  Loader2,
   RefreshCw,
   Scale,
   XCircle,
@@ -18,8 +17,8 @@ import type {
 } from "@/api-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CardSkeleton, LoadingLine, Skeleton } from "@/components/ui/skeleton";
 import { ApiError, api } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 function percent(value: number | null | undefined, digits = 1): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
@@ -43,13 +42,16 @@ function SourceStrip({ sources }: { sources: { path: string; present: boolean }[
     <ul className="flex flex-wrap items-center gap-1.5">
       {sources.map((source) => (
         <li key={source.path}>
-          <Badge variant={source.present ? "outline" : "danger"} className="gap-1">
+          <Badge
+            variant={source.present ? "outline" : "danger"}
+            className="max-w-full gap-1 whitespace-normal text-left"
+          >
             {source.present ? (
-              <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+              <CheckCircle2 className="h-3 w-3 shrink-0" aria-hidden="true" />
             ) : (
-              <XCircle className="h-3 w-3" aria-hidden="true" />
+              <XCircle className="h-3 w-3 shrink-0" aria-hidden="true" />
             )}
-            <span className="font-mono">{source.path}</span>
+            <span className="break-all font-mono">{source.path}</span>
             {!source.present && <span>missing</span>}
           </Badge>
         </li>
@@ -513,29 +515,20 @@ export function Evidence() {
 function EvidenceLoading() {
   return (
     <div className="mx-auto w-full max-w-[1400px] px-5 pb-24 pt-8">
-      <div className="h-3 w-20 animate-pulse rounded bg-line/60" />
-      <div className="mt-3 h-9 w-80 max-w-full animate-pulse rounded bg-line/60" />
-      <div className="mt-3 h-3 w-[34rem] max-w-full animate-pulse rounded bg-line/40" />
+      <Skeleton className="h-3 w-20" />
+      <Skeleton className="mt-3 h-9 w-80 max-w-full" />
+      <Skeleton className="mt-3 h-3 w-[34rem] max-w-full" />
       <div className="mt-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {[0, 1, 2, 3].map((item) => (
-          <div
-            key={item}
-            className="h-20 animate-pulse rounded-lg border border-line/60 bg-panel/40"
-          />
+          <CardSkeleton key={item} lines={1} />
         ))}
       </div>
       <div className="mt-4 space-y-2">
         {[0, 1, 2, 3, 4].map((item) => (
-          <div
-            key={item}
-            className={cn("h-10 animate-pulse rounded border border-line/50 bg-panel/30", item % 2 === 0 && "opacity-80")}
-          />
+          <Skeleton key={item} className="h-10 w-full opacity-80" />
         ))}
       </div>
-      <p className="mt-4 flex items-center gap-2 font-mono text-[10.5px] text-muted">
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" aria-hidden="true" />
-        reading the committed result files…
-      </p>
+      <LoadingLine className="mt-4">reading the committed result files…</LoadingLine>
     </div>
   );
 }

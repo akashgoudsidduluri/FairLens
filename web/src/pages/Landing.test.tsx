@@ -99,6 +99,21 @@ describe("Landing Model Library", () => {
     );
   });
 
+  it("says when the service returns an empty catalog instead of showing blank sections", async () => {
+    getTargets.mockResolvedValue({ targets: [] });
+    renderLanding();
+
+    expect(
+      await screen.findByText(/No targets were returned/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Validation suite/i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /reload targets/i }),
+    ).toBeInTheDocument();
+  });
+
   it("shows an offline state with a retry when the service is down", async () => {
     getTargets.mockRejectedValue(new ApiError(503, "service unavailable"));
     renderLanding();

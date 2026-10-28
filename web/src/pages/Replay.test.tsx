@@ -55,8 +55,12 @@ describe("Replay page", () => {
       (await screen.findAllByText(/Replay of a recorded audit/i)).length,
     ).toBeGreaterThan(0);
     expect(screen.getByText(/no sandbox or model was contacted/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /pause replay/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /restart replay/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: /pause replay/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /restart replay/i }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/replay position/i)).toBeInTheDocument();
   });
 

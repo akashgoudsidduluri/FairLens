@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowDown, Boxes, FlaskConical, Loader2, Radio, Sparkles } from "lucide-react";
+import { ArrowDown, Boxes, FlaskConical, Radio, Sparkles } from "lucide-react";
 
 import type { TargetCard, TargetCatalog } from "@/api-types";
 import { Logo } from "@/components/Logo";
@@ -8,6 +8,7 @@ import { ConnectEndpoint } from "@/components/library/ConnectEndpoint";
 import { ModelCard } from "@/components/library/ModelCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CardSkeleton, LoadingLine } from "@/components/ui/skeleton";
 import { ApiError, api } from "@/lib/api";
 
 type LoadState =
@@ -170,7 +171,23 @@ export function Landing() {
           </div>
         )}
 
-        {state.status === "ready" && (
+        {state.status === "ready" && catalog.length === 0 && (
+          <div
+            role="status"
+            className="mt-8 rounded-xl border border-dashed border-line/70 bg-panel/30 p-6"
+          >
+            <p className="text-sm text-ink">No targets were returned.</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-muted">
+              The service answered but its catalog is empty. Nothing is inferred
+              to fill the page; check the target adapters and reload.
+            </p>
+            <Button variant="secondary" size="sm" className="mt-4" onClick={load}>
+              Reload targets
+            </Button>
+          </div>
+        )}
+
+        {state.status === "ready" && catalog.length > 0 && (
           <>
             <SectionHeading
               icon={<FlaskConical className="h-4 w-4" aria-hidden="true" />}
@@ -292,9 +309,13 @@ function SectionHeading({
 
 function LibrarySkeleton() {
   return (
-    <div className="mt-8 flex items-center gap-2 font-mono text-[11px] text-muted">
-      <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" aria-hidden="true" />
-      reading target capabilities…
+    <div className="mt-8">
+      <LoadingLine>reading target capabilities…</LoadingLine>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 6 }, (_, index) => (
+          <CardSkeleton key={index} lines={index % 2 === 0 ? 3 : 2} />
+        ))}
+      </div>
     </div>
   );
 }

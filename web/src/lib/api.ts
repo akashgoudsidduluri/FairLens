@@ -12,7 +12,10 @@ import type {
   AuditRecord,
   CertificateList,
   DecisionResponse,
+  EndpointCheckRequest,
+  EndpointCheckResponse,
   HealthResponse,
+  TargetCatalog,
   VerifyResponse,
 } from "@/api-types";
 
@@ -54,6 +57,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<HealthResponse>("/health"),
+
+  /** Model Library. Capabilities and availability are authoritative server-side. */
+  getTargets: () => request<TargetCatalog>("/targets"),
+
+  /** Server-side health check; auth secrets never leave the API process. */
+  checkEndpoint: (body: EndpointCheckRequest) =>
+    request<EndpointCheckResponse>("/targets/check", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   startAudit: (body: AuditCreateRequest) =>
     request<AuditCreated>("/audits", {

@@ -50,4 +50,38 @@ describe("typed API client", () => {
     expect(streamUrl("a b", 0)).toBe("/api/audits/a%20b/events");
     expect(streamUrl("abc", 42)).toBe("/api/audits/abc/events?last_event_id=42");
   });
+
+  it("fetches the model library from the server", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ targets: [], service: "fairlens-api" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const catalog = await api.getTargets();
+    expect(catalog.targets).toEqual([]);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/targets");
+  });
+
+  it("posts a connected-endpoint health check", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, detail: "ok", latency_ms: 4, models: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.checkEndpoint({
+      base_url: "https://lender.test",
+      auth_env_var: "LENDER_KEY",
+      probe_cap: 5000,
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/targets/check");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toMatchObject({
+      base_url: "https://lender.test",
+      auth_env_var: "LENDER_KEY",
+      probe_cap: 5000,
+    });
+  });
 });

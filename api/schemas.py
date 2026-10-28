@@ -45,6 +45,13 @@ class AuditCreateRequest(ServiceModel):
         default=None,
         description="Override audit.sequential.enabled for this audit",
     )
+    target_spec: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Inline declarative adapter spec from the connected-endpoint form. "
+            "Mutually exclusive with target/api_url."
+        ),
+    )
 
 
 class AuditCreated(ServiceModel):
@@ -131,3 +138,49 @@ class HealthResponse(ServiceModel):
     status: Literal["ok"] = "ok"
     service: str = "fairlens-api"
     version: str = "2.0.0"
+
+
+class TargetAvailability(ServiceModel):
+    status: Literal["available", "unavailable", "configured"]
+    reason: str = ""
+
+
+class TargetCard(ServiceModel):
+    """One target in the Model Library, with its real capabilities."""
+
+    id: str
+    label: str
+    kind: Literal["validation", "real", "llm"]
+    family: str
+    target: str
+    model_id: int
+    description: str
+    supported_probes: list[str]
+    unsupported_probes: dict[str, str]
+    availability: TargetAvailability
+    planned_pairs: int
+    probe_cap: int | None = None
+    metric: str | None = None
+
+
+class TargetCatalog(ServiceModel):
+    targets: list[TargetCard]
+    service: str = "fairlens-api"
+
+
+class EndpointCheckRequest(ServiceModel):
+    """Sanity check a connected endpoint before Start Audit is enabled."""
+
+    base_url: str = Field(min_length=1, max_length=2000)
+    health_path: str = Field(default="/health", max_length=200)
+    auth_env_var: str | None = Field(default=None, max_length=100)
+    auth_header: str = Field(default="X-API-Key", max_length=100)
+    probe_cap: int = Field(default=100000, ge=0, le=10_000_000)
+
+
+class EndpointCheckResponse(ServiceModel):
+    ok: bool
+    status_code: int | None = None
+    detail: str
+    latency_ms: float
+    models: list[str] = Field(default_factory=list)

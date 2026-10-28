@@ -30,6 +30,7 @@ from trust.certificate import (
 )
 
 from api.jobs import AuditJobManager
+from api.catalog import build_catalog, check_endpoint
 from api.schemas import (
     AuditCreateRequest,
     AuditCreated,
@@ -38,14 +39,19 @@ from api.schemas import (
     DecisionInfo,
     DecisionRequest,
     DecisionResponse,
+    EndpointCheckRequest,
+    EndpointCheckResponse,
     HealthResponse,
     StreamEvent,
     TamperRequest,
     TamperResponse,
+    TargetCatalog,
     VerifyResponse,
 )
 from api.storage import AuditStore, create_store
 from targets import TargetError, build_target, sandbox_model_id
+from targets.base import apply_probe_cap
+from targets.http import HTTPTargetAdapter
 
 HEARTBEAT_SECONDS = 15.0
 
@@ -138,6 +144,26 @@ def create_app(
     def health() -> HealthResponse:
         return HealthResponse()
 
+    @app.get("/targets", response_model=TargetCatalog, tags=["targets"])
+    def targets() -> TargetCatalog:
+        """Model Library: the validation suite, real models, and the LLM target.
+
+        Capabilities and availability are read from the server, so the browser
+        cannot claim a target is available when it is not.
+        """
+
+        return build_catalog(cfg)
+
+    @app.post(
+        "/targets/check", response_model=EndpointCheckResponse, tags=["targets"]
+    )
+    def check_connected_endpoint(
+        request: EndpointCheckRequest,
+    ) -> EndpointCheckResponse:
+        """Server-side health check for the connected-endpoint form."""
+
+        return check_endpoint(request)
+
     @app.post(
         "/audits",
         response_model=AuditCreated,
@@ -152,7 +178,30 @@ def create_app(
         model_id = request.model_id
         target_ref = (request.target or "").strip() or None
         adapter = None
-        if target_ref is not None:
+        if request.target_spec is not None:
+            if target_ref is not None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="target and target_spec are mutually exclusive",
+                )
+            if not isinstance(request.target_spec, dict):
+                raise HTTPException(status_code=422, detail="target_spec must be an object")
+            if request.target_spec.get("family"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="inline specs may not declare a family",
+                )
+            try:
+                adapter = HTTPTargetAdapter(dict(request.target_spec))
+                apply_probe_cap(adapter, (cfg.get("targets") or {}).get("probe_cap"))
+            except (TargetError, ValueError, TypeError) as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"invalid connected endpoint: {exc}",
+                ) from exc
+            api_url = adapter.base_url
+            target_ref = f"inline:{adapter.name}"
+        elif target_ref is not None:
             try:
                 adapter = build_target(target_ref, cfg, base_url=request.api_url)
             except (TargetError, ValueError, FileNotFoundError) as exc:

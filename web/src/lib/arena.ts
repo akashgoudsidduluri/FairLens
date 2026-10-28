@@ -9,6 +9,41 @@ export function isFlip(event: ProbeEvent): boolean {
   return event.original_approved !== event.twin_approved;
 }
 
+/** Hard cap on the archived history kept for one probe. */
+export const MAX_ARCHIVED_POINTS = 240;
+
+/**
+ * Thin a series to at most `maxPoints` while keeping the first and last point.
+ *
+ * Both edges matter: the first point anchors where an attribute started, and
+ * the last is the running estimate a reader is looking at now.
+ */
+function thinPoints<T>(points: T[], maxPoints: number): T[] {
+  if (maxPoints <= 0) return [];
+  if (points.length <= maxPoints) return [...points];
+  if (maxPoints === 1) return [points[points.length - 1]];
+  const step = (points.length - 1) / (maxPoints - 1);
+  return Array.from(
+    { length: maxPoints },
+    (_, index) => points[Math.round(index * step)],
+  );
+}
+
+/**
+ * Append one event to a probe's archive and trim it back to the hard cap.
+ *
+ * The archive outlives the capped render buffer, so it must stay bounded
+ * without dropping the first or latest observation for the attribute.
+ */
+export function appendArchivedPoint(
+  points: ProbeEvent[],
+  event: ProbeEvent,
+  maxPoints = MAX_ARCHIVED_POINTS,
+): ProbeEvent[] {
+  const next = [...points, event];
+  return next.length <= maxPoints ? next : thinPoints(next, maxPoints);
+}
+
 export interface EvidencePoint {
   n: number;
   net: number;
@@ -29,14 +64,11 @@ export function evidenceSeries(
   const target = probeId ?? events[events.length - 1].probe_id;
   const points = events.filter((event) => event.probe_id === target);
   if (points.length === 0) return [];
-  const step = Math.max(1, Math.ceil(points.length / maxPoints));
-  return points
-    .filter((_, index) => index % step === 0 || index === points.length - 1)
-    .map((event) => ({
-      n: event.n_running,
-      net: event.net_flip_rate_running * 100,
-      band: [event.ci_low_running * 100, event.ci_high_running * 100],
-    }));
+  return thinPoints(points, maxPoints).map((event) => ({
+    n: event.n_running,
+    net: event.net_flip_rate_running * 100,
+    band: [event.ci_low_running * 100, event.ci_high_running * 100],
+  }));
 }
 
 export interface ProbeSummary {

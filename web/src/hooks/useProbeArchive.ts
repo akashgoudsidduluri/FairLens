@@ -1,9 +1,7 @@
 import * as React from "react";
 
 import type { ProbeEvent } from "@/api-types";
-import { pairKey } from "@/lib/arena";
-
-const MAX_POINTS_PER_PROBE = 240;
+import { appendArchivedPoint, pairKey } from "@/lib/arena";
 
 export interface ProbeArchive {
   /** Probe ids in the order they first appeared. */
@@ -45,13 +43,7 @@ export function useProbeArchive(
       for (const event of fresh) {
         const existing = byId[event.probe_id];
         if (!existing) order.push(event.probe_id);
-        const points = existing ? [...existing, event] : [event];
-        byId[event.probe_id] =
-          points.length > MAX_POINTS_PER_PROBE * 2
-            ? points.filter(
-                (_, index) => index % 2 === 0 || index === points.length - 1,
-              )
-            : points;
+        byId[event.probe_id] = appendArchivedPoint(existing ?? [], event);
       }
       return { order, byId };
     });

@@ -108,6 +108,53 @@ describe("EvidenceMeter", () => {
     );
   });
 
+  it("switches the headline, interval, and curve when another attribute row is selected", async () => {
+    const user = userEvent.setup();
+    renderMeter([
+      makeProbe({
+        pair_index: 1999,
+        b_running: 40,
+        c_running: 0,
+        n_running: 2000,
+        net_flip_rate_running: 0.02,
+        ci_low_running: 0.014,
+        ci_high_running: 0.026,
+      }),
+      makeProbe({
+        probe_id: "single-pincode_group-female",
+        pair_index: 499,
+        changed_field: "pincode_group",
+        b_running: 40,
+        c_running: 0,
+        n_running: 500,
+        net_flip_rate_running: 0.08,
+        ci_low_running: 0.05,
+        ci_high_running: 0.11,
+      }),
+    ]);
+
+    // The newest probe is charted by default.
+    expect(screen.getByText("+8.00%", { selector: "span.text-3xl" })).toBeInTheDocument();
+    expect(screen.getByText(/over 500 pairs · region group/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /gender \+2\.00%/ }));
+    expect(screen.getByText("+2.00%", { selector: "span.text-3xl" })).toBeInTheDocument();
+    expect(screen.getByText(/over 2K pairs · gender/)).toBeInTheDocument();
+    expect(screen.getByText(/95% CI \[\+1\.40%, \+2\.60%\]/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /gender \+2\.00%/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /region group \+8\.00%/ })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    await user.click(screen.getByRole("button", { name: /region group \+8\.00%/ }));
+    expect(screen.getByText("+8.00%", { selector: "span.text-3xl" })).toBeInTheDocument();
+    expect(screen.getByText(/over 500 pairs · region group/)).toBeInTheDocument();
+  });
+
   it("keeps an earlier attribute after its events leave the stream buffer", () => {
     const gender = makeProbe({
       b_running: 40,

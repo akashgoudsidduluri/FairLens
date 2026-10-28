@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MAX_ARCHIVED_POINTS,
+  appendArchivedPoint,
   evidenceGroups,
   evidenceSeries,
   isFlip,
@@ -41,7 +43,8 @@ describe("arena helpers", () => {
     expect(series[0]).toEqual({ n: 1, net: 0, band: [0, 10] });
   });
 
-  it("downsamples long series but keeps the last point", () => {    const events = Array.from({ length: 500 }, (_, index) =>
+  it("downsamples long series while keeping the first and last points", () => {
+    const events = Array.from({ length: 500 }, (_, index) =>
       makeProbe({
         pair_index: index,
         b_running: index,
@@ -51,8 +54,26 @@ describe("arena helpers", () => {
       }),
     );
     const series = evidenceSeries(events, 50);
-    expect(series.length).toBeLessThanOrEqual(51);
+    expect(series.length).toBeLessThanOrEqual(50);
+    expect(series[0].n).toBe(1);
     expect(series[series.length - 1].n).toBe(500);
+    expect(
+      series.every((point, index) => index === 0 || point.n > series[index - 1].n),
+    ).toBe(true);
+  });
+
+  it("hard-caps an archived probe history without losing either edge", () => {
+    let points: Parameters<typeof appendArchivedPoint>[0] = [];
+    const total = MAX_ARCHIVED_POINTS * 3;
+    for (let index = 0; index < total; index += 1) {
+      points = appendArchivedPoint(
+        points,
+        makeProbe({ pair_index: index, n_running: index + 1 }),
+      );
+    }
+    expect(points.length).toBe(MAX_ARCHIVED_POINTS);
+    expect(points[0].pair_index).toBe(0);
+    expect(points[points.length - 1].pair_index).toBe(total - 1);
   });
 
   it("can chart a chosen probe and summarize every attribute seen", () => {
@@ -117,6 +138,44 @@ describe("arena helpers", () => {
     ]);
     expect(groups[0].count).toBe(2);
     expect(groups[0].latest.probeId).toBe("matched-gender-male");
+  });
+
+  it("collapses A→B, B→A and matched retests into one row per attribute", () => {
+    const probes = [
+      makeProbe({
+        probe_id: "single-gender-female",
+        phase: "single_attribute",
+        changed_field: "gender",
+      }),
+      makeProbe({
+        probe_id: "single-gender-male",
+        phase: "single_attribute",
+        changed_field: "gender",
+      }),
+      makeProbe({
+        probe_id: "matched-gender-female",
+        phase: "matched_retest",
+        changed_field: "gender",
+        n_running: 900,
+      }),
+      makeProbe({
+        probe_id: "single-pincode_group-female",
+        phase: "single_attribute",
+        changed_field: "pincode_group",
+      }),
+    ];
+    const groups = evidenceGroups(probes.map(probeSummary));
+
+    expect(groups.map((group) => group.key)).toEqual(["gender", "pincode_group"]);
+    expect(groups[0].count).toBe(3);
+    expect(groups[0].latest.probeId).toBe("matched-gender-female");
+    expect(groups[0].latest.n).toBe(900);
+  });
+
+  it("returns an empty series for an unknown probe id instead of throwing", () => {
+    const events = [makeProbe()];
+    expect(() => evidenceSeries(events, 120, "probe-that-does-not-exist")).not.toThrow();
+    expect(evidenceSeries(events, 120, "probe-that-does-not-exist")).toEqual([]);
   });
 
   it("finds the latest sequential stop and ignores continue decisions", () => {

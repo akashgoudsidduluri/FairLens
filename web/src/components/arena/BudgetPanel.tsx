@@ -18,8 +18,12 @@ function useElapsed(startedAt: number): string {
     return () => clearInterval(timer);
   }, []);
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000));
-  const minutes = Math.floor(seconds / 60);
-  return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  return clock(seconds);
+}
+
+function clock(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  return `${String(minutes).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 }
 
 function Stat({
@@ -62,6 +66,8 @@ export interface BudgetPanelProps {
   lastEventId: number;
   reconnects: number;
   startedAt: number;
+  /** Replay position, which is a recording clock rather than wall time. */
+  elapsedMs?: number;
   sequentialEnabled: boolean;
 }
 
@@ -74,12 +80,15 @@ export function BudgetPanel({
   lastEventId,
   reconnects,
   startedAt,
+  elapsedMs,
   sequentialEnabled,
 }: BudgetPanelProps) {
   const used = probeCount * 2;
   const cap = probeCap > 0 ? probeCap : 0;
   const percent = cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
-  const elapsed = useElapsed(startedAt);
+  const liveElapsed = useElapsed(startedAt);
+  const elapsed =
+    elapsedMs === undefined ? liveElapsed : clock(Math.floor(elapsedMs / 1000));
 
   return (
     <section className="panel p-4" aria-label="Probe budget">

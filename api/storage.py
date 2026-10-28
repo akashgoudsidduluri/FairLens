@@ -46,6 +46,7 @@ class AuditStore(Protocol):
         include_mitigation: bool,
         include_narrative: bool,
         sequential: bool,
+        probe_cap: int | None = None,
     ) -> None: ...
 
     def mark_running(self, audit_id: str) -> None: ...
@@ -114,6 +115,7 @@ class SQLiteAuditStore:
                     include_mitigation INTEGER NOT NULL DEFAULT 1,
                     include_narrative INTEGER NOT NULL DEFAULT 1,
                     sequential INTEGER NOT NULL DEFAULT 0,
+                    probe_cap INTEGER,
                     created_at TEXT NOT NULL,
                     started_at TEXT,
                     completed_at TEXT,
@@ -151,6 +153,10 @@ class SQLiteAuditStore:
                 conn.execute(
                     "ALTER TABLE audits ADD COLUMN sequential INTEGER NOT NULL DEFAULT 0"
                 )
+            # R4: persist the effective probe cap so a reload can never show the
+            # global cap for an audit that ran under a stricter inline cap.
+            if "probe_cap" not in columns:
+                conn.execute("ALTER TABLE audits ADD COLUMN probe_cap INTEGER")
 
     def create_audit(
         self,
@@ -163,14 +169,16 @@ class SQLiteAuditStore:
         include_mitigation: bool,
         include_narrative: bool,
         sequential: bool,
+        probe_cap: int | None = None,
     ) -> None:
         with self._connection() as conn:
             conn.execute(
                 """
                 INSERT INTO audits (
                     id, status, model_id, target, api_url, seed,
-                    include_mitigation, include_narrative, sequential, created_at
-                ) VALUES (?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?)
+                    include_mitigation, include_narrative, sequential, probe_cap,
+                    created_at
+                ) VALUES (?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     audit_id,
@@ -181,6 +189,7 @@ class SQLiteAuditStore:
                     int(include_mitigation),
                     int(include_narrative),
                     int(sequential),
+                    probe_cap,
                     utc_now(),
                 ),
             )

@@ -91,6 +91,7 @@ class AuditRecord(ServiceModel):
     include_mitigation: bool
     include_narrative: bool
     sequential: bool = False
+    probe_cap: int | None = None
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -99,6 +100,43 @@ class AuditRecord(ServiceModel):
     event_count: int = 0
     last_seq: int = 0
     decision: DecisionInfo | None = None
+    replay_id: str | None = Field(
+        default=None,
+        description="Recorded replay that matches this audit, if one exists.",
+    )
+
+
+class ReplaySummary(ServiceModel):
+    """One recorded audit, without the frames."""
+
+    id: str
+    label: str
+    target: str | None = None
+    model_id: int | None = None
+    seed: int | None = None
+    recorded_at: datetime | None = None
+    duration_ms: int = 0
+    event_count: int = 0
+    probe_count: int = 0
+    findings: int = 0
+    source_audit_id: str | None = None
+
+
+class ReplayList(ServiceModel):
+    replays: list[ReplaySummary]
+    count: int
+
+
+class ReplayFile(ServiceModel):
+    """The full recording served to the replay player."""
+
+    version: int
+    id: str
+    label: str
+    recorded_at: datetime | None = None
+    source_audit_id: str | None = None
+    audit: AuditRecord
+    events: list[StreamEvent]
 
 
 class DecisionResponse(ServiceModel):
@@ -138,6 +176,76 @@ class HealthResponse(ServiceModel):
     status: Literal["ok"] = "ok"
     service: str = "fairlens-api"
     version: str = "2.0.0"
+
+
+class EvidenceSource(ServiceModel):
+    path: str
+    present: bool
+
+
+class SandboxModelEvidence(ServiceModel):
+    model_id: int
+    runs: int
+    expectation_passed: int
+    expectation_total: int
+    kept_mean: float
+    kept_min: int
+    kept_max: int
+    rejected_mean: float
+    immaterial_mean: float
+    false_alarm_before: int | None = None
+    false_alarm_after: int | None = None
+    false_alarm_runs: int = 0
+    runtime_mean_s: float
+    number_check_passed: int
+    misses: list[str]
+
+
+class SandboxEvidence(ServiceModel):
+    models: list[SandboxModelEvidence]
+    runs: int
+    expectation_passed: int
+    expectation_total: int
+    false_alarm_before: int | None = None
+    false_alarm_after: int | None = None
+    sources: list[EvidenceSource]
+
+
+class FairlearnEvidence(ServiceModel):
+    attribute: str
+    demographic_parity_difference: float | None = None
+    equalized_odds_difference: float | None = None
+
+
+class RealModelEvidence(ServiceModel):
+    model: str
+    label: str
+    runs: int
+    supported_probes: list[str]
+    skipped_probes: list[str]
+    kept_mean: float
+    rejected_mean: float
+    immaterial_mean: float
+    impact_per_10k_mean: float | None = None
+    impact_per_10k_min: float | None = None
+    impact_per_10k_max: float | None = None
+    holdout_accuracy: float | None = None
+    holdout_auc: float | None = None
+    fairlearn: list[FairlearnEvidence]
+    notes: list[str]
+    errors: list[str]
+
+
+class RealEvidence(ServiceModel):
+    models: list[RealModelEvidence]
+    markdown: str
+    sources: list[EvidenceSource]
+
+
+class EvidenceReport(ServiceModel):
+    generated_at: datetime
+    sandbox: SandboxEvidence
+    real: RealEvidence
 
 
 class TargetAvailability(ServiceModel):

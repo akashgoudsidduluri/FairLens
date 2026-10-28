@@ -36,6 +36,7 @@ export interface AuditRecord {
   include_mitigation: boolean;
   include_narrative: boolean;
   sequential?: boolean;
+  probe_cap?: number | null;
   created_at: string;
   started_at?: string | null;
   completed_at?: string | null;
@@ -44,6 +45,7 @@ export interface AuditRecord {
   event_count?: number;
   last_seq?: number;
   decision?: DecisionInfo | null;
+  replay_id?: string | null;
 }
 
 export interface AuditReport {
@@ -115,6 +117,23 @@ export interface Evidence {
   p_adjusted: number;
 }
 
+export interface EvidenceReport {
+  generated_at: string;
+  sandbox: SandboxEvidence;
+  real: RealEvidence;
+}
+
+export interface EvidenceSource {
+  path: string;
+  present: boolean;
+}
+
+export interface FairlearnEvidence {
+  attribute: string;
+  demographic_parity_difference?: number | null;
+  equalized_odds_difference?: number | null;
+}
+
 export interface Finding {
   id: string;
   kind: "single_attribute" | "intersectional";
@@ -166,6 +185,88 @@ export interface ProbeEvent {
   ci_high_running: number;
   ci_method?: string;
   timestamp?: string;
+}
+
+export interface RealEvidence {
+  models: RealModelEvidence[];
+  markdown: string;
+  sources: EvidenceSource[];
+}
+
+export interface RealModelEvidence {
+  model: string;
+  label: string;
+  runs: number;
+  supported_probes: string[];
+  skipped_probes: string[];
+  kept_mean: number;
+  rejected_mean: number;
+  immaterial_mean: number;
+  impact_per_10k_mean?: number | null;
+  impact_per_10k_min?: number | null;
+  impact_per_10k_max?: number | null;
+  holdout_accuracy?: number | null;
+  holdout_auc?: number | null;
+  fairlearn: FairlearnEvidence[];
+  notes: string[];
+  errors: string[];
+}
+
+export interface ReplayFile {
+  version: number;
+  id: string;
+  label: string;
+  recorded_at?: string | null;
+  source_audit_id?: string | null;
+  audit: AuditRecord;
+  events: StreamEvent[];
+}
+
+export interface ReplayList {
+  replays: ReplaySummary[];
+  count: number;
+}
+
+export interface ReplaySummary {
+  id: string;
+  label: string;
+  target?: string | null;
+  model_id?: number | null;
+  seed?: number | null;
+  recorded_at?: string | null;
+  duration_ms?: number;
+  event_count?: number;
+  probe_count?: number;
+  findings?: number;
+  source_audit_id?: string | null;
+}
+
+export interface SandboxEvidence {
+  models: SandboxModelEvidence[];
+  runs: number;
+  expectation_passed: number;
+  expectation_total: number;
+  false_alarm_before?: number | null;
+  false_alarm_after?: number | null;
+  sources: EvidenceSource[];
+}
+
+export interface SandboxModelEvidence {
+  model_id: number;
+  runs: number;
+  expectation_passed: number;
+  expectation_total: number;
+  kept_mean: number;
+  kept_min: number;
+  kept_max: number;
+  rejected_mean: number;
+  immaterial_mean: number;
+  false_alarm_before?: number | null;
+  false_alarm_after?: number | null;
+  false_alarm_runs?: number;
+  runtime_mean_s: number;
+  number_check_passed: number;
+  misses: string[];
 }
 
 export interface ServiceMeta {

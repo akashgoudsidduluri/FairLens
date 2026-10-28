@@ -31,6 +31,14 @@ against the computed JSON. The LLM writes prose; it never calculates.
    the seed-42 audit, a known pre-registration miss), while the intersectional
    hotspot is large. The **Demo mode** button runs Models 2 → 7 → 5 in one go.
 
+To clear the certificate chain between demos without touching recorded audits:
+
+```powershell
+.\.venv\Scripts\python -m trust.reset_demo_data
+```
+
+Pass `--db path\to\store.db` to reset a different certificate store.
+
 ## Setup
 
 Requires Python 3.11.

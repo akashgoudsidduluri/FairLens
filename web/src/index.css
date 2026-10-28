@@ -26,9 +26,13 @@
     background: rgba(94, 234, 212, 0.28);
   }
 
-  *:focus-visible {
+  :where(a, button, [role="button"], input, select, textarea, summary, [tabindex]):focus-visible {
     outline: 2px solid #5eead4;
     outline-offset: 2px;
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
   }
 }
 
@@ -65,4 +69,29 @@
 *::-webkit-scrollbar-thumb {
   background: #24313e;
   border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/*
+ * Honour the operating-system motion preference. Playback and live streams
+ * still advance; only the entrance, flip, and scroll animations are removed.
+ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

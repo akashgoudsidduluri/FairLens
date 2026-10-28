@@ -15,6 +15,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...actual.api,
       getTargets: vi.fn(),
+      getReplays: vi.fn(),
       startAudit: vi.fn(),
       checkEndpoint: vi.fn(),
     },
@@ -22,6 +23,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
 });
 
 const getTargets = vi.mocked(api.getTargets);
+const getReplays = vi.mocked(api.getReplays);
 const startAudit = vi.mocked(api.startAudit);
 
 function renderLanding() {
@@ -40,6 +42,8 @@ function renderLanding() {
 describe("Landing Model Library", () => {
   beforeEach(() => {
     getTargets.mockReset();
+    getReplays.mockReset();
+    getReplays.mockResolvedValue({ replays: [], count: 0 });
     startAudit.mockReset();
   });
 
@@ -97,6 +101,55 @@ describe("Landing Model Library", () => {
     await waitFor(() =>
       expect(screen.getByText(/arena/)).toBeInTheDocument(),
     );
+  });
+
+  it("links to committed recordings without starting an audit", async () => {
+    getTargets.mockResolvedValue(makeCatalog());
+    getReplays.mockResolvedValue({
+      count: 2,
+      replays: [
+        {
+          id: "sandbox-2-seed-42",
+          label: "Validation model 2",
+          model_id: 2,
+          seed: 42,
+          duration_ms: 88000,
+        },
+        {
+          id: "adult-income-seed-42",
+          label: "Adult Income",
+          model_id: 0,
+          seed: 42,
+          duration_ms: 600000,
+        },
+      ],
+    });
+    renderLanding();
+
+    const replayLink = await screen.findByRole("link", {
+      name: /validation model 2/i,
+    });
+    expect(replayLink).toHaveAttribute("href", "/replay/sandbox-2-seed-42");
+    expect(screen.getByText("2 recordings")).toBeInTheDocument();
+    expect(
+      screen.getByText(/model 2 · seed 42 · 1m 28s/i),
+    ).toBeInTheDocument();
+    expect(startAudit).not.toHaveBeenCalled();
+  });
+
+  it("says when the service returns an empty catalog instead of showing blank sections", async () => {
+    getTargets.mockResolvedValue({ targets: [] });
+    renderLanding();
+
+    expect(
+      await screen.findByText(/No targets were returned/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Validation suite/i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /reload targets/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows an offline state with a retry when the service is down", async () => {

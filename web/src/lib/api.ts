@@ -14,8 +14,12 @@ import type {
   DecisionResponse,
   EndpointCheckRequest,
   EndpointCheckResponse,
+  EvidenceReport,
   HealthResponse,
+  ReplayFile,
+  ReplayList,
   ServiceMeta,
+  TamperResponse,
   TargetCatalog,
   VerifyResponse,
 } from "@/api-types";
@@ -80,6 +84,16 @@ export const api = {
 
   getAudit: (auditId: string) => request<AuditRecord>(`/audits/${auditId}`),
 
+  /** Recorded audits, newest first. Served from files; no target is called. */
+  getReplays: () => request<ReplayList>("/replays"),
+
+  /** One full recording: event stream plus the report stored with it. */
+  getReplay: (replayId: string) =>
+    request<ReplayFile>(`/replays/${encodeURIComponent(replayId)}`),
+
+  /** Aggregates computed from eval/results/*.csv and real_models.md. */
+  getEvidence: () => request<EvidenceReport>("/evidence"),
+
   decide: (auditId: string, approver: string, decision: "approve" | "reject") =>
     request<DecisionResponse>(`/audits/${auditId}/decision`, {
       method: "POST",
@@ -90,6 +104,15 @@ export const api = {
 
   verifyCertificates: () =>
     request<VerifyResponse>("/certificates/verify", { method: "POST" }),
+
+  tamperCertificate: (
+    index: number,
+    field: "payload" | "prev_hash" | "record_hash" | "created_at" = "payload",
+  ) =>
+    request<TamperResponse>("/certificates/tamper-demo", {
+      method: "POST",
+      body: JSON.stringify({ index, field, confirm: true }),
+    }),
 };
 
 /**

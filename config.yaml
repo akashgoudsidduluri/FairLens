@@ -82,6 +82,94 @@ audit:
         - {loan_amount: high, gender: female}
         - {income: low, name_group: N2}
 
+# Suit B attribute registry (R5). Roles decide what may be a treatment and
+# what may be a context. Legitimate attributes are context-only and are never
+# reported as bias on their own. Bins are fixed before implementation.
+attributes:
+  gender:
+    type: categorical
+    role: protected
+    source: gender
+    values: [female, male]
+    treatment: true
+    context: true
+    treatment_levels: [female]
+    comparison_level: male
+  age:
+    type: bands
+    role: proxy
+    source: age
+    labels: ["<35", "35-44", "45+"]
+    edges: [35, 45]
+    treatment: true
+    context: true
+    treatment_levels: ["35-44", "45+"]
+    comparison_level: "<35"
+    feasibility:
+      min_age: 21
+      max_age: 65
+      employment_max: "age - 21"
+  pincode_group:
+    type: categorical
+    role: protected
+    source: pincode_group
+    values: [P1, P2, P3]
+    treatment: true
+    context: true
+    treatment_levels: [P2]
+    comparison_level: P1
+  name_group:
+    type: categorical
+    role: protected
+    source: name_group
+    values: [N1, N2, N3]
+    treatment: true
+    context: true
+    treatment_levels: [N2]
+    comparison_level: N1
+  urban_rural:
+    type: categorical
+    role: proxy
+    source: urban_rural
+    values: [urban, rural]
+    treatment: false
+    context: true
+    reason: >-
+      P3 has no rural pincode, so flipping urban/rural independently is not
+      defined for the whole population. It is used as a context.
+  income:
+    type: bands
+    role: legitimate
+    source: income
+    labels: [low, mid, high]
+    edges: [400000, 900000]
+    treatment: false
+    context: true
+  credit_score:
+    type: bands
+    role: legitimate
+    source: credit_score
+    labels: [low, mid, high]
+    edges: [600, 750]
+    treatment: false
+    context: true
+  loan_amount:
+    type: bands
+    role: legitimate
+    source: loan_amount
+    labels: [low, mid, high]
+    edges: [200000, 600000]
+    treatment: false
+    context: true
+  employment_years:
+    type: bands
+    role: legitimate
+    source: employment_years
+    labels: [low, mid, high]
+    edges: [3, 8]
+    treatment: false
+    context: true
+
 # Target adapters (v2). `probe_cap` is a hard ceiling on applicants sent to a
 # custom target in one audit; the sandbox validation adapters ship 100000.
 targets:

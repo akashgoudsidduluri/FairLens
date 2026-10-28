@@ -49,3 +49,40 @@ all seven models.
 
 These expectations are intentionally falsifiable. Phase 6 reports every miss,
 every false alarm, and the threshold sensitivity analysis without retuning.
+
+## Real targets (R3b) — pre-registered before evaluation
+
+These targets were not written by us. They are trained on public data and their
+behaviour was not planted, so there is no honest way to predict a direction. The
+expectation is deliberately content-free.
+
+### `uci_credit_default` (UCI Default of Credit Card Clients, logistic regression)
+
+**No expected finding. Report whatever is found, including no material bias.**
+
+### `adult_income` (UCI Adult, histogram gradient boosting)
+
+**No expected finding. Report whatever is found, including no material bias.**
+
+### Frozen protocol for both
+
+- Thresholds, corrections, materiality, pair counts, and seeds are the v1
+  pre-registered values in `config.yaml`, unchanged: alpha 0.05, Holm, materiality
+  0.02, 2,000 natural pairs per supported attribute, 4,000 observational
+  applicants, seeds 1–5, 95% bootstrap CI with 4,000 iterations.
+- The feature mapping, model artifacts, and approval rule were committed in R3a
+  before this section. They will not be changed after seeing results.
+- Only the `gender` probe is defined for these datasets. `pincode_group`,
+  `name_group`, and the intersectional scan are unsupported because neither
+  dataset has a region, name, or urban/rural column. They will be reported as
+  skipped, not faked, and no finding will be claimed for them.
+- Mitigation is disabled for these targets.
+- Fairlearn demographic-parity and equalized-odds differences are computed on the
+  same holdout split for comparison only. They are not an audit result and will
+  not be used to reinterpret the audit.
+- No threshold, feature, model, or mapping will be tuned after seeing results. If
+  the result is "no material bias", it will be reported as that.
+- For transparency: reduced-size plumbing runs (200 observational applicants, 40
+  pairs, `min_pairs` 5, over ASGI) were used during R3a adapter development to
+  verify skip events and twin feasibility. They are not the evaluation, use no
+  frozen audit settings, and were not used to form any expectation above.

@@ -91,6 +91,7 @@ class AuditRecord(ServiceModel):
     include_mitigation: bool
     include_narrative: bool
     sequential: bool = False
+    probe_cap: int | None = None
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None

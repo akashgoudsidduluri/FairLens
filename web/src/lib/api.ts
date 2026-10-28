@@ -16,6 +16,7 @@ import type {
   EndpointCheckResponse,
   HealthResponse,
   ServiceMeta,
+  TamperResponse,
   TargetCatalog,
   VerifyResponse,
 } from "@/api-types";
@@ -90,6 +91,15 @@ export const api = {
 
   verifyCertificates: () =>
     request<VerifyResponse>("/certificates/verify", { method: "POST" }),
+
+  tamperCertificate: (
+    index: number,
+    field: "payload" | "prev_hash" | "record_hash" | "created_at" = "payload",
+  ) =>
+    request<TamperResponse>("/certificates/tamper-demo", {
+      method: "POST",
+      body: JSON.stringify({ index, field, confirm: true }),
+    }),
 };
 
 /**

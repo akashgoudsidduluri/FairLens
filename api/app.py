@@ -80,6 +80,9 @@ def _record_response(record: dict[str, Any]) -> AuditRecord:
         include_mitigation=bool(record["include_mitigation"]),
         include_narrative=bool(record["include_narrative"]),
         sequential=bool(record.get("sequential", False)),
+        probe_cap=(
+            int(record["probe_cap"]) if record.get("probe_cap") is not None else None
+        ),
         created_at=record["created_at"],
         started_at=record.get("started_at"),
         completed_at=record.get("completed_at"),
@@ -235,6 +238,12 @@ def create_app(
             api_url = (request.api_url or str(cfg["api"]["base_url"])).strip()
         if not api_url:
             raise HTTPException(status_code=422, detail="api_url cannot be empty")
+        global_probe_cap = (cfg.get("targets") or {}).get("probe_cap")
+        effective_probe_cap = (
+            int(adapter.probe_cap)
+            if adapter is not None
+            else (int(global_probe_cap) if global_probe_cap is not None else None)
+        )
         seed = int(cfg.get("seed", 42) if request.seed is None else request.seed)
         sequential = (
             request.sequential
@@ -251,6 +260,7 @@ def create_app(
             include_mitigation=request.include_mitigation,
             include_narrative=request.include_narrative,
             sequential=sequential,
+            probe_cap=effective_probe_cap,
         )
         manager.start(
             audit_id,

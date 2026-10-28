@@ -9,6 +9,7 @@ import { EarlyStopBanner } from "@/components/arena/EarlyStopBanner";
 import { EvidenceMeter } from "@/components/arena/EvidenceMeter";
 import { FlippedTray } from "@/components/arena/FlippedTray";
 import { TwinStream } from "@/components/arena/TwinStream";
+import { ReportPanel } from "@/components/report/ReportPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuditStream } from "@/hooks/useAuditStream";
@@ -87,7 +88,8 @@ export function Arena() {
   const label = targetLabel(record?.target, record?.model_id);
   const findings = record?.result?.findings?.length;
   const targetCard = targets.find((card) => card.target === record?.target);
-  const probeCap = targetCard?.probe_cap ?? meta?.probe_cap ?? 0;
+  const probeCap =
+    record?.probe_cap ?? targetCard?.probe_cap ?? meta?.probe_cap ?? 0;
   const plannedPairs = targetCard?.planned_pairs ?? meta?.n_pairs ?? 0;
 
   return (
@@ -208,6 +210,15 @@ export function Arena() {
           />
         </div>
       </div>
+
+      {record?.result && (
+        <ReportPanel
+          record={record}
+          report={record.result}
+          agentEvents={stream.agentEvents}
+          onDecided={setRecord}
+        />
+      )}
     </div>
   );
 }

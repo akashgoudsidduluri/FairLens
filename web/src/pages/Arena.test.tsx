@@ -144,6 +144,31 @@ describe("Arena page", () => {
     expect(screen.getByText("resumed 1×")).toBeInTheDocument();
   });
 
+  it("uses the stored probe cap for a connected endpoint after a reload", async () => {
+    mockedStream.mockReturnValue({
+      status: "open",
+      agentEvents: [],
+      probeEvents: [makeProbe()],
+      probeCount: 10,
+      lastEventId: 4,
+      reconnects: 0,
+      error: null,
+      done: null,
+    });
+    // The inline target is not in the catalog, so the record is the only place
+    // the stricter cap can come from after the arena is reloaded.
+    getAudit.mockResolvedValue({
+      ...record(),
+      target: "inline:connected-endpoint",
+      probe_cap: 5000,
+    });
+
+    renderArena();
+
+    expect(await screen.findByText(/\/ 5,000 applicants/)).toBeInTheDocument();
+    expect(screen.queryByText(/\/ 100,000 applicants/)).not.toBeInTheDocument();
+  });
+
   it("keeps the meter off when thresholds cannot be read", async () => {
     meta.mockRejectedValue(new Error("offline"));
     mockedStream.mockReturnValue({

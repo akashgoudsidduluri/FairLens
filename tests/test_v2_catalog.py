@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import time
 
 import httpx
@@ -10,6 +11,7 @@ import httpx
 from api.app import create_app
 from api.catalog import build_catalog, check_endpoint
 from api.schemas import EndpointCheckRequest
+from api.storage import SQLiteAuditStore
 from config_loader import load_config
 from schemas import AgentEvent, AuditReport
 from targets.http import HTTPTargetAdapter
@@ -247,6 +249,7 @@ async def test_inline_target_spec_starts_an_audit_with_an_http_adapter(tmp_path)
 
     assert record["status"] == "completed"
     assert record["target"] == "inline:connected-lender"
+    assert record["probe_cap"] == 5000
     assert isinstance(captured["target"], HTTPTargetAdapter)
     assert record["api_url"] == "http://127.0.0.1:9999"
 
@@ -280,3 +283,42 @@ def test_http_adapter_can_be_built_from_the_inline_spec():
     assert isinstance(adapter, HTTPTargetAdapter)
     assert adapter.probe_cap == 5000
     assert adapter.base_url == "http://127.0.0.1:9999"
+
+
+def test_store_migrates_audits_written_before_probe_cap(tmp_path):
+    db = tmp_path / "audits.db"
+    store = SQLiteAuditStore(db)
+    store.init()
+    store.create_audit(
+        audit_id="before",
+        model_id=2,
+        target="sandbox:2",
+        api_url="http://127.0.0.1:8010",
+        seed=42,
+        include_mitigation=False,
+        include_narrative=False,
+        sequential=False,
+        probe_cap=5000,
+    )
+    store.close()
+
+    # Simulate an R2/R3 database that predates the probe_cap column.
+    with sqlite3.connect(db) as conn:
+        conn.execute("ALTER TABLE audits DROP COLUMN probe_cap")
+
+    migrated = SQLiteAuditStore(db)
+    migrated.init()
+    assert migrated.get_audit("before")["probe_cap"] is None
+
+    migrated.create_audit(
+        audit_id="after",
+        model_id=2,
+        target="sandbox:2",
+        api_url="http://127.0.0.1:8010",
+        seed=42,
+        include_mitigation=False,
+        include_narrative=False,
+        sequential=False,
+        probe_cap=5000,
+    )
+    assert migrated.get_audit("after")["probe_cap"] == 5000

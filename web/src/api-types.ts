@@ -36,6 +36,7 @@ export interface AuditRecord {
   include_mitigation: boolean;
   include_narrative: boolean;
   sequential?: boolean;
+  probe_cap?: number | null;
   created_at: string;
   started_at?: string | null;
   completed_at?: string | null;

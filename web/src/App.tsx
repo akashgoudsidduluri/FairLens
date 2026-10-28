@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Link, Route, Routes } from "react-router-dom";
+import { Hash } from "lucide-react";
 
 import { Logo, Wordmark } from "@/components/Logo";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,11 @@ const Landing = React.lazy(() =>
 );
 const Arena = React.lazy(() =>
   import("@/pages/Arena").then((module) => ({ default: module.Arena })),
+);
+const Certificates = React.lazy(() =>
+  import("@/pages/Certificates").then((module) => ({
+    default: module.Certificates,
+  })),
 );
 
 function RouteFallback() {
@@ -33,8 +39,15 @@ export default function App() {
               <Wordmark />
             </Link>
             <div className="flex items-center gap-3">
+              <Link
+                to="/certificates"
+                className="hidden items-center gap-1.5 rounded-md border border-line px-2.5 py-1 font-mono text-[10px] text-muted transition-colors hover:border-accent/45 hover:text-accent sm:inline-flex"
+              >
+                <Hash className="h-3 w-3" aria-hidden="true" />
+                certificates
+              </Link>
               <Badge variant="accent">v4 · probe arena</Badge>
-              <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-muted sm:block">
+              <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-muted lg:block">
                 black-box fairness audit
               </span>
             </div>
@@ -45,6 +58,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/audit/:auditId" element={<Arena />} />
+              <Route path="/certificates" element={<Certificates />} />
             </Routes>
           </React.Suspense>
         </main>

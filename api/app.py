@@ -12,6 +12,7 @@ import json
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Callable
 
 from fastapi import FastAPI, Header, HTTPException, Query, status
@@ -31,6 +32,7 @@ from trust.certificate import (
 
 from api.jobs import AuditJobManager
 from api.catalog import build_catalog, check_endpoint
+from api.evidence import build_evidence, results_directory
 from api.replays import (
     export_replay,
     find_replay,
@@ -48,6 +50,7 @@ from api.schemas import (
     DecisionResponse,
     EndpointCheckRequest,
     EndpointCheckResponse,
+    EvidenceReport,
     HealthResponse,
     ReplayFile,
     ReplayList,
@@ -127,11 +130,13 @@ def create_app(
     audit_fn: Callable[..., Any] = run_audit,
     replay_dir: Any = None,
     export_replays: bool | None = None,
+    evidence_dir: Any = None,
 ) -> FastAPI:
     cfg = config or load_config()
     audit_store = store or create_store(cfg)
     cert_db = repo_path(cfg["certificate"]["db_path"])
     replays_path = replay_dir or replay_directory(cfg)
+    evidence_path = evidence_dir or results_directory(cfg)
     record_replays = (
         export_replays if export_replays is not None else replay_dir is not None
     )
@@ -467,6 +472,15 @@ def create_app(
         if payload is None:
             raise HTTPException(status_code=404, detail="replay not found")
         return ReplayFile.model_validate(payload)
+
+    @app.get("/evidence", response_model=EvidenceReport, tags=["evidence"])
+    def evidence() -> EvidenceReport:
+        """Aggregates computed from the committed evaluation results."""
+
+        return EvidenceReport(
+            generated_at=datetime.now(timezone.utc),
+            **build_evidence(evidence_path),
+        )
 
     @app.get(
         "/certificates", response_model=CertificateList, tags=["certificates"]

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link, Route, Routes } from "react-router-dom";
-import { Hash } from "lucide-react";
+import { ClipboardList, Hash } from "lucide-react";
 
 import { Logo, Wordmark } from "@/components/Logo";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,9 @@ const Certificates = React.lazy(() =>
   import("@/pages/Certificates").then((module) => ({
     default: module.Certificates,
   })),
+);
+const Evidence = React.lazy(() =>
+  import("@/pages/Evidence").then((module) => ({ default: module.Evidence })),
 );
 
 function RouteFallback() {
@@ -43,6 +46,13 @@ export default function App() {
             </Link>
             <div className="flex items-center gap-3">
               <Link
+                to="/evidence"
+                className="hidden items-center gap-1.5 rounded-md border border-line px-2.5 py-1 font-mono text-[10px] text-muted transition-colors hover:border-accent/45 hover:text-accent sm:inline-flex"
+              >
+                <ClipboardList className="h-3 w-3" aria-hidden="true" />
+                evidence
+              </Link>
+              <Link
                 to="/certificates"
                 className="hidden items-center gap-1.5 rounded-md border border-line px-2.5 py-1 font-mono text-[10px] text-muted transition-colors hover:border-accent/45 hover:text-accent sm:inline-flex"
               >
@@ -63,6 +73,7 @@ export default function App() {
               <Route path="/audit/:auditId" element={<Arena />} />
               <Route path="/replay/:replayId" element={<Replay />} />
               <Route path="/certificates" element={<Certificates />} />
+              <Route path="/evidence" element={<Evidence />} />
             </Routes>
           </React.Suspense>
         </main>

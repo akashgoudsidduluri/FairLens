@@ -14,6 +14,7 @@ import type {
   DecisionResponse,
   EndpointCheckRequest,
   EndpointCheckResponse,
+  EvidenceReport,
   HealthResponse,
   ReplayFile,
   ReplayList,
@@ -89,6 +90,9 @@ export const api = {
   /** One full recording: event stream plus the report stored with it. */
   getReplay: (replayId: string) =>
     request<ReplayFile>(`/replays/${encodeURIComponent(replayId)}`),
+
+  /** Aggregates computed from eval/results/*.csv and real_models.md. */
+  getEvidence: () => request<EvidenceReport>("/evidence"),
 
   decide: (auditId: string, approver: string, decision: "approve" | "reject") =>
     request<DecisionResponse>(`/audits/${auditId}/decision`, {

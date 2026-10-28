@@ -178,6 +178,76 @@ class HealthResponse(ServiceModel):
     version: str = "2.0.0"
 
 
+class EvidenceSource(ServiceModel):
+    path: str
+    present: bool
+
+
+class SandboxModelEvidence(ServiceModel):
+    model_id: int
+    runs: int
+    expectation_passed: int
+    expectation_total: int
+    kept_mean: float
+    kept_min: int
+    kept_max: int
+    rejected_mean: float
+    immaterial_mean: float
+    false_alarm_before: int | None = None
+    false_alarm_after: int | None = None
+    false_alarm_runs: int = 0
+    runtime_mean_s: float
+    number_check_passed: int
+    misses: list[str]
+
+
+class SandboxEvidence(ServiceModel):
+    models: list[SandboxModelEvidence]
+    runs: int
+    expectation_passed: int
+    expectation_total: int
+    false_alarm_before: int | None = None
+    false_alarm_after: int | None = None
+    sources: list[EvidenceSource]
+
+
+class FairlearnEvidence(ServiceModel):
+    attribute: str
+    demographic_parity_difference: float | None = None
+    equalized_odds_difference: float | None = None
+
+
+class RealModelEvidence(ServiceModel):
+    model: str
+    label: str
+    runs: int
+    supported_probes: list[str]
+    skipped_probes: list[str]
+    kept_mean: float
+    rejected_mean: float
+    immaterial_mean: float
+    impact_per_10k_mean: float | None = None
+    impact_per_10k_min: float | None = None
+    impact_per_10k_max: float | None = None
+    holdout_accuracy: float | None = None
+    holdout_auc: float | None = None
+    fairlearn: list[FairlearnEvidence]
+    notes: list[str]
+    errors: list[str]
+
+
+class RealEvidence(ServiceModel):
+    models: list[RealModelEvidence]
+    markdown: str
+    sources: list[EvidenceSource]
+
+
+class EvidenceReport(ServiceModel):
+    generated_at: datetime
+    sandbox: SandboxEvidence
+    real: RealEvidence
+
+
 class TargetAvailability(ServiceModel):
     status: Literal["available", "unavailable", "configured"]
     reason: str = ""

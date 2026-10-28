@@ -1,8 +1,16 @@
 import * as React from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowDown, Boxes, FlaskConical, Radio, Sparkles } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  ArrowDown,
+  Boxes,
+  Clapperboard,
+  FlaskConical,
+  Play,
+  Radio,
+  Sparkles,
+} from "lucide-react";
 
-import type { TargetCard, TargetCatalog } from "@/api-types";
+import type { ReplaySummary, TargetCard, TargetCatalog } from "@/api-types";
 import { Logo } from "@/components/Logo";
 import { ConnectEndpoint } from "@/components/library/ConnectEndpoint";
 import { ModelCard } from "@/components/library/ModelCard";
@@ -117,6 +125,8 @@ export function Landing() {
           </dl>
         </div>
       </section>
+
+      <RecordedReplays />
 
       <section id="model-library" className="scroll-mt-24 pt-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -266,6 +276,128 @@ export function Landing() {
         <ConnectEndpoint onStarted={(id) => navigate(`/audit/${id}`)} />
       </section>
     </div>
+  );
+}
+
+function replayTarget(replay: ReplaySummary): string {
+  if (replay.target?.startsWith("sandbox:")) {
+    return `model ${replay.model_id ?? replay.target.split(":")[1]}`;
+  }
+  if (replay.target) {
+    const file = replay.target.split("/").pop() ?? replay.target;
+    return file.replace(/\.ya?ml$/i, "").replaceAll("-", " ");
+  }
+  return replay.model_id != null ? `model ${replay.model_id}` : "recorded";
+}
+
+function replayDuration(ms?: number): string {
+  if (!ms || ms <= 0) return "—";
+  const seconds = Math.round(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  return minutes > 0
+    ? `${minutes}m ${String(seconds % 60).padStart(2, "0")}s`
+    : `${seconds}s`;
+}
+
+function RecordedReplays() {
+  const [replays, setReplays] = React.useState<ReplaySummary[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let active = true;
+    api
+      .getReplays()
+      .then((list) => {
+        if (active) setReplays(list.replays);
+      })
+      .catch((cause: unknown) => {
+        if (active) {
+          setError(
+            cause instanceof ApiError
+              ? cause.detail
+              : "could not read recordings",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <section className="pt-12" aria-labelledby="recorded-replays">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="eyebrow">
+            <Clapperboard className="mr-1 inline h-3 w-3" aria-hidden="true" />
+            offline replay
+          </p>
+          <h2
+            id="recorded-replays"
+            className="mt-2 text-2xl font-semibold tracking-[-0.02em]"
+          >
+            Watch a recorded audit
+          </h2>
+          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted">
+            Every recording is a committed event stream plus the report stored at
+            recording time. Playback contacts no sandbox, model, or job runner.
+          </p>
+        </div>
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted/70">
+          {error
+            ? "recordings unavailable"
+            : replays === null
+              ? "loading recordings…"
+              : `${replays.length} recording${replays.length === 1 ? "" : "s"}`}
+        </span>
+      </div>
+
+      {replays === null && !error && (
+        <LoadingLine className="mt-4">reading recordings…</LoadingLine>
+      )}
+
+      {error && (
+        <p className="mt-4 rounded-lg border border-line/70 bg-panel/40 px-3 py-2 text-[12px] text-muted">
+          Recordings could not be read: {error}. Live audits still work.
+        </p>
+      )}
+
+      {replays !== null && replays.length === 0 && (
+        <p className="mt-4 rounded-lg border border-dashed border-line/70 bg-panel/30 px-3 py-2 text-[12px] text-muted">
+          No recordings are installed. Run an audit to create one, or add a file
+          under <code className="font-mono text-ink">data/replays/</code>.
+        </p>
+      )}
+
+      {replays !== null && replays.length > 0 && (
+        <ul className="mt-4 grid gap-2 sm:grid-cols-2 2xl:grid-cols-4">
+          {replays.map((replay) => (
+            <li key={replay.id}>
+              <Link
+                to={`/replay/${encodeURIComponent(replay.id)}`}
+                className="group flex h-full items-center justify-between gap-3 rounded-lg border border-line/70 bg-panel/40 px-3 py-2.5 transition-colors hover:border-accent/45 hover:bg-accent/[0.04]"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[12.5px] font-medium text-ink">
+                    {replay.label || replay.id}
+                  </span>
+                  <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.12em] text-muted">
+                    {replayTarget(replay)}
+                    {" · "}seed {replay.seed ?? "—"}
+                    {" · "}
+                    {replayDuration(replay.duration_ms)}
+                  </span>
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1 rounded border border-accent/35 bg-accent/10 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-accent">
+                  <Play className="h-2.5 w-2.5" aria-hidden="true" />
+                  Replay
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

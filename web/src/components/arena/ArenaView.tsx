@@ -129,7 +129,11 @@ export function ArenaView({
               Replay of a recorded audit
             </Badge>
           )}
-          <Badge variant="outline">model {record?.model_id ?? "—"}</Badge>
+          <Badge variant="outline">
+            {record?.target && !record.target.startsWith("sandbox:")
+              ? label
+              : `model ${record?.model_id ?? "—"}`}
+          </Badge>
           <Badge variant={STATUS_VARIANT[stream.status as StreamStatus] ?? "outline"}>
             {stream.status}
           </Badge>

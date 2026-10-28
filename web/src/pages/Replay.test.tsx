@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
 import { Replay } from "@/pages/Replay";
-import { makeCatalog, makeMeta, makeReplay } from "@/test/fixtures";
+import { makeCatalog, makeMeta, makeRecord, makeReplay } from "@/test/fixtures";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -81,6 +81,25 @@ describe("Replay page", () => {
     expect(screen.getByText(/read-only recording/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/approver name/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /run again/i })).toBeInTheDocument();
+  });
+
+  it("labels a real-data recording by target instead of the legacy model id", async () => {
+    getReplay.mockResolvedValue(
+      makeReplay({
+        id: "adult-income-seed-42",
+        label: "UCI Adult (gradient boosting)",
+        audit: makeRecord({
+          model_id: 2,
+          target: "targets/real/adult-income.yaml",
+        }),
+      }),
+    );
+    renderReplay();
+
+    expect(
+      (await screen.findAllByText("Adult Income")).length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("model 2")).not.toBeInTheDocument();
   });
 
   it("reports a missing recording without starting an audit", async () => {

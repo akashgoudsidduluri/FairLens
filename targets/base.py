@@ -17,6 +17,7 @@ from typing import Any
 from schemas import Applicant, ModelResponse
 
 ALL_PROBES = frozenset({"gender", "pincode_group", "name_group", "intersectional"})
+ALL_TREATMENTS = frozenset({"gender", "age", "pincode_group", "name_group"})
 
 
 class TargetError(RuntimeError):
@@ -38,8 +39,15 @@ class TargetAdapter(ABC):
     name: str
     probe_cap: int
     supported_probes: frozenset[str] = ALL_PROBES
+    # Treatment attributes available to the generalized search. Targets whose
+    # inputs cannot be flipped on an attribute must leave it out; the search
+    # skips it with an event (the same mechanism as unsupported probes).
+    supported_treatments: frozenset[str] = ALL_TREATMENTS
     unsupported_details: dict[str, str] = {}
     supports_mitigation: bool = True
+
+    def treatment_supported(self, attribute: str) -> bool:
+        return attribute in self.supported_treatments
 
     @property
     @abstractmethod
@@ -77,6 +85,8 @@ class TargetAdapter(ABC):
             "name": self.name,
             "probe_cap": int(self.probe_cap),
             "probes_used": int(self.probes_used),
+            "supported_probes": sorted(self.supported_probes),
+            "supported_treatments": sorted(self.supported_treatments),
         }
 
 

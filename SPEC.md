@@ -256,3 +256,68 @@ audit:
 `statistician` event on a stop. `run_audit(..., target=..., sequential=...)`
 forwards both. Intersectional probes remain fixed-sample; final `Evidence` always
 uses the observed pairs.
+
+## Real-data targets (R3a)
+The seven sandbox models remain the validation suite. R3a adds two targets whose
+behaviour nobody planted, trained on public UCI data.
+
+- `targets/real/datasets.py`: downloads `uci_credit_default` (UCI 350) and
+  `adult_income` (UCI 2) from `archive.ics.uci.edu`, caches archives under
+  `data/real/raw/` (git-ignored), and writes canonical CSVs under `data/real/`
+  (committed). `DatasetUnavailable` names the exact URL, archive path, and
+  extraction layout when offline; it never synthesises rows. `dataset_summary`
+  records rows, licence, citation, DOI, URL, cache path, and sha256.
+- `targets/real/features.py`: one mapping from `Applicant` to dataset columns,
+  used by both serving and feasibility. Numeric fields use a monotone empirical
+  quantile transform into the training distribution recorded in
+  `metrics.json`; columns without a canonical source are documented training
+  constants. `validate_row` checks training ranges and vocabularies.
+  `validate_pair` also requires a gender twin to change exactly `sex` (names are
+  not model inputs). `probe_capabilities` returns supported and unsupported
+  probes with reasons.
+- `targets/real/train.py`: seed 42, stratified 80/20 holdout. Logistic regression
+  for credit default; histogram gradient boosting for Adult. The protected
+  attribute `sex` is a natural feature in both (D-019). Saves joblib artifacts
+  plus `<model>.metrics.json` with holdout accuracy/AUC/approval rate, Fairlearn
+  demographic-parity and equalized-odds differences on the same holdout, ranges,
+  quantile grids, categories, and dataset metadata. Approval rule fixed before
+  auditing: `P(favourable) >= 0.5`, score `P*1000`.
+- `targets/real/models.py`: artifact loading, `score_applicants`, and
+  `RealModelUnavailable` / `InfeasibleApplicant`.
+- `targets/real/serve.py`: FastAPI service, default `127.0.0.1:8030`,
+  `GET /health`, `GET /models`, `POST /score_batch?model=...`. Same
+  `[{approved, score}]` shape as the sandbox.
+- `targets/real/adapter.py`: `RealTargetAdapter(HTTPTargetAdapter)` with
+  dataset-aware `validate_pair`, `supports_mitigation = False`.
+- `targets/real/*.yaml`: `family: real` adapters for both models, resolved by
+  `targets.build_target` (`_adapter_class` dispatches on `family`). The generic
+  YAML path is unchanged.
+
+### Capability-aware probing
+`TargetAdapter` gains `supported_probes` (defaults to all four),
+`unsupported_details`, `supports_mitigation`, and `validate_pair`. The pipeline
+builds the audit plan from `supported_probes`, emits one `planner` event per
+skipped probe with the target's stated reason, restricts observations and
+findings to supported attributes, records `supported_probes`/`skipped_probes` in
+`report.observational`, skips the intersectional scan when undefined, and skips
+mitigation when the target does not support it. `Prober._build_pairs` drops
+infeasible pairs and emits a `prober` event with counts and reasons; the
+denominator is the number of feasible pairs, and `ProbeResult.requested_n`
+keeps the pre-filter request.
+
+### Dataset mapping and unsupported fields
+- `uci_credit_default`: `income -> LIMIT_BAL`, `gender -> SEX`,
+  `age -> AGE`, `credit_score -> EDUCATION` and the payment-delay columns,
+  `loan_amount -> BILL_AMT1..6`, `income/12 -> PAY_AMT1..6`. `MARRIAGE` is a
+  constant. `employment_years`, pincode, name, and urban/rural are unused.
+- `adult_income`: `age`, `gender -> sex`, `credit_score ->
+  education/education_num`, `employment_years -> hours_per_week`. Race,
+  workclass, marital status, occupation, relationship, native country,
+  capital gain/loss, and `fnlwgt` are documented training constants. `income`
+  and `loan_amount` are unused.
+- Both datasets lack a name and a pincode/region column, so `pincode_group`,
+  `name_group`, and the intersectional scan are declared unsupported. They are
+  skipped and reported, never faked. Race exists in Adult but not in the
+  canonical contract: it is held at the training mode when serving and measured
+  only by the Fairlearn holdout baseline.
+- Full source, licence, citation, and mapping: `targets/real/README.md`.

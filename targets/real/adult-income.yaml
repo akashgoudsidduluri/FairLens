@@ -1,0 +1,57 @@
+# FairLens R3 target: UCI Adult Income, histogram gradient boosting.
+# Trained by `python -m targets.real.train` (seed 42, 80/20 holdout).
+# The adapter posts canonical applicants; the service maps them to the
+# dataset's own columns (see targets/real/README.md).
+name: adult-income
+real_model: adult_income
+family: real
+description: >
+  Histogram gradient boosting on the UCI Adult dataset, approving when
+  P(income > 50K) >= 0.5. Protected attributes SEX and RACE are natural model
+  features (D-019); RACE has no canonical source and is held at its training
+  mode when serving.
+base_url: "${FAIRLENS_REAL_URL:-http://127.0.0.1:8030}"
+
+health:
+  path: /health
+
+request:
+  method: POST
+  path: /score_batch
+  headers:
+    Content-Type: application/json
+    Accept: application/json
+  query:
+    model: adult_income
+  body: "${applicants}"
+
+response:
+  items: "$"
+  approved: "approved"
+  score: "score"
+
+limits:
+  probe_cap: 100000
+  rate_limit_per_second: 0
+  max_retries: 3
+  backoff_seconds: 0.25
+  timeout_seconds: 30
+
+auth:
+  type: none
+
+capabilities:
+  supported_probes: [gender]
+  supports_mitigation: false
+  unsupported_probes:
+    pincode_group: "Dataset has no pincode or region column; the model was trained without one."
+    name_group: "Dataset has no applicant-name column; the model was trained without a name."
+    intersectional: "Intersectional cells require urban/rural; the dataset has no such column."
+  unsupported_fields:
+    pincode_group: "not in dataset"
+    name_group: "not in dataset"
+    urban_rural: "not in dataset"
+    race: "present in the dataset but absent from the canonical contract; held at training mode and never varied by a probe"
+  used_canonical_fields: [age, gender, credit_score, employment_years]
+  unused_canonical_fields:
+    [income, loan_amount, pincode, name, pincode_group, name_group, urban_rural, age_band, id]

@@ -48,7 +48,7 @@ import httpx
 
 from schemas import Applicant, ModelResponse
 
-from targets.base import ProbeCapExceeded, TargetAdapter, TargetError
+from targets.base import ALL_PROBES, ProbeCapExceeded, TargetAdapter, TargetError
 from targets.mapping import MappingError, get_path, load_spec, resolve_template
 
 
@@ -110,6 +110,16 @@ class HTTPTargetAdapter(TargetAdapter):
         self._transport = transport
         self._probes_used = 0
         self._last_request = 0.0
+        capabilities = spec.get("capabilities") or {}
+        declared = capabilities.get("supported_probes")
+        self.supported_probes = (
+            ALL_PROBES if declared is None else frozenset(str(p) for p in declared)
+        )
+        self.unsupported_details = {
+            str(key): str(value)
+            for key, value in (capabilities.get("unsupported_probes") or {}).items()
+        }
+        self.supports_mitigation = bool(capabilities.get("supports_mitigation", True))
 
     @classmethod
     def from_yaml(

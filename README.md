@@ -199,6 +199,43 @@ the exact McNemar p-value and seeded bootstrap CI on the pairs actually observed
 The intersectional scan stays fixed-sample. `tests/test_v2_sequential.py`
 compares a sequential run with a fixed-sample run on the same fake scorer.
 
+### Real-data targets (R3a)
+
+Two targets trained on public UCI datasets, with no planted behaviour. The seven
+sandbox models remain the validation suite; real-target results are reported in a
+separate table.
+
+| Target | Data | Model | Holdout accuracy | Holdout AUC |
+|---|---|---|---|---|
+| `uci_credit_default` | UCI Default of Credit Card Clients (30,000 rows, CC BY 4.0) | logistic regression | 0.8083 | 0.7079 |
+| `adult_income` | UCI Adult (32,561 rows, CC BY 4.0) | histogram gradient boosting | 0.8756 | 0.9300 |
+
+```powershell
+# train (downloads and caches UCI data; artifacts are committed)
+.\.venv\Scripts\python -m targets.real.train
+
+# serve both models (default 127.0.0.1:8030)
+.\.venv\Scripts\python -m targets.real.serve
+
+# audit through the YAML adapter
+$body = '{"model_id": 2, "target": "targets/real/adult-income.yaml", "include_mitigation": false}'
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8020/audits `
+  -ContentType 'application/json' -Body $body
+```
+
+The protected attribute `sex` is a natural model feature in both models (D-019).
+Neither dataset has a name or pincode/region column, so `name_group`,
+`pincode_group`, and the intersectional scan are declared unsupported: the
+pipeline skips them, emits one event per skipped probe with the reason, and
+records the skips in the report. Twins are checked against the training feature
+ranges and a gender twin must change exactly `sex`. Fairlearn demographic-parity
+and equalized-odds differences on the same holdout are stored in
+`data/real/artifacts/*.metrics.json` for comparison only.
+
+The model is real; the probe population is the synthetic FairLens generator
+mapped into the dataset's columns, not the dataset's own population. Full
+licences, citations, column mapping, and limitations: `targets/real/README.md`.
+
 ## Tests
 
 ```powershell
@@ -267,6 +304,8 @@ the Model 5 miss, are in [DECISIONS.md](DECISIONS.md).
 | `ui/` | Streamlit app, pure HTML components, Plotly theme, CSS |
 | `api/` | v2 FastAPI audit service, SQLite store, SSE stream, TS type generation |
 | `targets/` | v2 YAML target adapters, sandbox validation adapters, probe caps |
+| `targets/real/` | R3a models trained on public UCI data, mapping, serving, adapters |
+| `data/real/` | Cached canonical CSVs and trained artifacts (raw archives ignored) |
 | `web/src/api-types.ts` | TypeScript types generated from the OpenAPI schema |
 | `eval/` | Full evaluation, Fairlearn baseline, charts, headless demo smoke |
 | `tests/` | pytest suite, including black-box boundary and v2 API/SSE tests |
@@ -275,6 +314,11 @@ the Model 5 miss, are in [DECISIONS.md](DECISIONS.md).
 
 - Synthetic data and a deliberately simple scoring formula. Results do not
   generalise to a real lender.
+- The R3a real-data models are trained on public data, but the probe population
+  is still the synthetic generator mapped into the dataset's columns. Neither
+  dataset has a name or region column, so two of the three frozen probes and the
+  intersectional scan are unsupported and skipped; age and race are measured only
+  by the Fairlearn holdout baseline.
 - Twins are approximations. Fairness metrics can conflict; a null result is not
   proof of fairness.
 - Model 5's single-attribute gender finding was predicted to be immaterial but

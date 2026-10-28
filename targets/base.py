@@ -16,6 +16,8 @@ from typing import Any
 
 from schemas import Applicant, ModelResponse
 
+ALL_PROBES = frozenset({"gender", "pincode_group", "name_group", "intersectional"})
+
 
 class TargetError(RuntimeError):
     """Raised for an unreachable or invalid target."""
@@ -26,10 +28,18 @@ class ProbeCapExceeded(TargetError):
 
 
 class TargetAdapter(ABC):
-    """Minimal contract for a scored target."""
+    """Minimal contract for a scored target.
+
+    ``supported_probes`` lets a target declare which frozen probes are defined
+    for it. A real dataset with no pincode column cannot answer a pincode twin;
+    the auditor skips that probe and says so rather than fabricating a value.
+    """
 
     name: str
     probe_cap: int
+    supported_probes: frozenset[str] = ALL_PROBES
+    unsupported_details: dict[str, str] = {}
+    supports_mitigation: bool = True
 
     @property
     @abstractmethod
@@ -47,6 +57,20 @@ class TargetAdapter(ABC):
     @abstractmethod
     async def score_batch(self, applicants: list[Applicant]) -> list[ModelResponse]:
         """Score a batch, returning one response per applicant in order."""
+
+    def validate_pair(
+        self,
+        original: Applicant,
+        twin: Applicant,
+        attribute: str,
+    ) -> tuple[bool, str]:
+        """Return ``(feasible, reason)`` for a counterfactual pair.
+
+        Targets whose inputs are a documented dataset domain override this to
+        reject twins outside that domain. The default accepts every pair.
+        """
+
+        return True, ""
 
     def describe(self) -> dict[str, Any]:
         return {

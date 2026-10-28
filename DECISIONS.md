@@ -272,3 +272,46 @@ implementation fixes but must not tune those values.
   SQLite databases are migrated in place with an `ALTER TABLE ... ADD COLUMN`
   guarded by `PRAGMA table_info`.
 - No frozen threshold, penalty, `expected_findings.md`, or v1 test was changed.
+
+## D-019 (R3a) Real-data targets: natural models, documented mapping
+- Two public datasets are used: UCI Default of Credit Card Clients (30,000 rows)
+  and UCI Adult (32,561 rows). Both are CC BY 4.0; citations are in
+  `targets/real/README.md` and in each `metrics.json`. The archives are cached
+  under `data/real/raw/` (git-ignored) and canonical CSVs plus trained artifacts
+  are committed so audits and tests are reproducible offline.
+- The models are "natural": logistic regression for credit default and
+  histogram gradient boosting for Adult, seed 42, stratified 80/20 holdout.
+  **The protected attribute `sex` is an ordinary feature.** No fairness-aware
+  preprocessing and no dropped-attribute variant was trained; the instruction was
+  to default to what a practitioner would do, and this is that default. The
+  Adult model also uses `race`.
+- Approval rule is fixed before auditing: `P(favourable) >= 0.5`, score is
+  `P*1000` on a 0-1000 scale. For credit default the favourable label is "no
+  default"; for Adult it is income > 50K. The FairLens materiality threshold is
+  unchanged at 0.02.
+- Canonical-to-dataset mapping is deterministic and documented column by column
+  in `targets/real/README.md`. Numeric fields use a monotone empirical-quantile
+  transform into the training distribution; dataset columns with no canonical
+  source are set to a documented training mode/median. This is feature mapping,
+  not row synthesis: no applicant row is fabricated, and no substitute dataset is
+  generated.
+- `pincode_group`, `name_group`, and the intersectional scan are **unsupported**
+  for both real targets because neither dataset has a pincode/region or name
+  column, and the intersectional cells require urban/rural. The adapters declare
+  this in YAML, the pipeline emits one skip event per probe with the reason, and
+  the report records `supported_probes` and `skipped_probes`. The auditor does
+  not invent values to keep a probe running.
+- Twins are checked against the training domain before scoring. A gender twin
+  must change exactly the mapped `sex` feature (the canonical name also changes,
+  but names are not model inputs). Infeasible pairs are counted and reported in
+  a `prober` event, never silently dropped.
+- Race exists only in Adult and has no canonical field. It is held at the
+  training mode when serving, so the twin audit cannot test race; the Fairlearn
+  baseline measures race on the real holdout instead.
+- Mitigation is disabled for real targets: an offset sweep needs the sandbox's
+  score endpoint, and applying a made-up offset to a real model's probability is
+  not a comparable intervention.
+- The probe population is still the synthetic FairLens generator mapped onto the
+  dataset columns. The model is real; the population is not the dataset's own
+  population. Results are reported with that limitation.
+- No threshold, planted penalty, frozen expectation, or v1 test was changed.

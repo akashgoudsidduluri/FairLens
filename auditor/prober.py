@@ -292,7 +292,37 @@ class Prober:
         twins = [
             make_twin(original, attribute, target_group, rng) for original in originals
         ]
-        return originals, twins
+        if self.target is None:
+            return originals, twins
+
+        kept_originals: list[Applicant] = []
+        kept_twins: list[Applicant] = []
+        rejected: list[dict[str, str]] = []
+        for original, twin in zip(originals, twins):
+            feasible, reason = self.target.validate_pair(original, twin, attribute)
+            if feasible:
+                kept_originals.append(original)
+                kept_twins.append(twin)
+            else:
+                rejected.append({"pair_id": original.id, "reason": reason})
+        if rejected:
+            examples = "; ".join(
+                item["reason"] for item in rejected[:3] if item["reason"]
+            )
+            self._emit(
+                "prober",
+                f"Feasibility check rejected {len(rejected)} of {len(originals)} "
+                f"{ATTR_LABELS[attribute]} twins outside the target's training "
+                f"domain: {examples}",
+                {
+                    "attribute": attribute,
+                    "requested_n": len(originals),
+                    "feasible_n": len(kept_originals),
+                    "rejected_n": len(rejected),
+                    "rejected": rejected,
+                },
+            )
+        return kept_originals, kept_twins
 
     async def _paired_score(
         self, model_id: int, originals: list[Applicant], twins: list[Applicant]
@@ -502,10 +532,17 @@ class Prober:
     ) -> ProbeResult:
         if attribute not in ATTR_LABELS:
             raise ValueError(f"unsupported attribute: {attribute}")
+        requested_n = n
         originals = self._sample_eligible(
             n, seed, attribute, target_group, comparison_group
         )
         originals, twins = self._build_pairs(originals, attribute, target_group, seed)
+        n = len(originals)
+        if n == 0:
+            raise ProberError(
+                f"No feasible {attribute} twins for target "
+                f"{getattr(self.target, 'name', self.api_url)!r}"
+            )
         use_sequential = self.sequential
         if use_sequential is None:
             use_sequential = bool(
@@ -558,7 +595,7 @@ class Prober:
             b=b,
             c=c,
             seed=seed,
-            requested_n=n,
+            requested_n=requested_n,
         )
 
     async def probe_intersectional(
@@ -675,6 +712,13 @@ class Prober:
             raise ValueError(f"unsupported attribute: {attribute}")
 
         originals, twins = self._build_pairs(originals, attribute, target_group, seed + 5)
+        requested_n = n
+        n = len(originals)
+        if n == 0:
+            raise ProberError(
+                f"No feasible matched {attribute} twins for target "
+                f"{getattr(self.target, 'name', self.api_url)!r}"
+            )
         o_resp, t_resp = await self._paired_score(model_id, originals, twins)
         b, c = self._counts(o_resp, t_resp)
         self._emit_pair_events(
@@ -726,6 +770,7 @@ class Prober:
             c=c,
             seed=seed + 29_000,
             bands=bands,
+            requested_n=requested_n,
         )
 
     # ---------------------------------------------------------------- sync API

@@ -13,9 +13,24 @@ import httpx
 
 from config_loader import REPO_ROOT
 
-from targets.base import ProbeCapExceeded, TargetAdapter, TargetError, apply_probe_cap
+from targets.base import (
+    ALL_PROBES,
+    ProbeCapExceeded,
+    TargetAdapter,
+    TargetError,
+    apply_probe_cap,
+)
 from targets.http import HTTPTargetAdapter
+from targets.mapping import load_spec
 from targets.sandbox import load_sandbox_target
+
+
+def _adapter_class(spec: dict[str, Any]) -> type[HTTPTargetAdapter]:
+    if spec.get("family") == "real":
+        from targets.real.adapter import RealTargetAdapter
+
+        return RealTargetAdapter
+    return HTTPTargetAdapter
 
 
 def build_target(
@@ -54,12 +69,13 @@ def build_target(
         resolved.relative_to(REPO_ROOT.resolve())
     except ValueError as exc:
         raise ValueError("target adapter must live inside the repository") from exc
-    adapter = HTTPTargetAdapter.from_yaml(resolved, transport=transport, env=env)
+    spec = load_spec(resolved)
+    adapter_class = _adapter_class(spec)
+    adapter = adapter_class(spec, path=resolved, transport=transport, env=env)
     if base_url:
         adapter.base_url = base_url.rstrip("/")
     apply_probe_cap(adapter, probe_cap)
     return adapter
-
 
 def sandbox_model_id(reference: str | None) -> int | None:
     """Return N for ``sandbox:N``, otherwise ``None``."""
@@ -77,6 +93,7 @@ def sandbox_model_id(reference: str | None) -> int | None:
 
 
 __all__ = [
+    "ALL_PROBES",
     "HTTPTargetAdapter",
     "ProbeCapExceeded",
     "TargetAdapter",

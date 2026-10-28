@@ -84,6 +84,24 @@ def run_audit(
         target=target,
         sequential=sequential,
     )
+    supported = (
+        target.supported_probes if target is not None else frozenset(ATTRIBUTES)
+        | {"intersectional"}
+    )
+    attributes = [attribute for attribute in ATTRIBUTES if attribute in supported]
+    skipped = {
+        probe: (
+            getattr(target, "unsupported_details", {}).get(probe)
+            or f"target {getattr(target, 'name', api_url)!r} does not support this probe"
+        )
+        for probe in (*ATTRIBUTES, "intersectional")
+        if probe not in supported
+    }
+    if not attributes:
+        raise ValueError(
+            "target supports none of the single-attribute probes "
+            f"(supported={sorted(supported)})"
+        )
     yield _event(
         "planner",
         f"Audit plan: {model_id} | observational sample {config['data']['n_observational']} | "
@@ -91,6 +109,24 @@ def run_audit(
         f"per intersectional cell | alpha={alpha} | materiality={materiality} | Holm",
         {"model_id": model_id, "seed": seed},
     )
+    if target is not None:
+        yield _event(
+            "planner",
+            f"Target {target.name}: probes {sorted(supported)}; "
+            f"skipped {sorted(skipped)}",
+            {
+                "target": target.name,
+                "supported_probes": sorted(supported),
+                "skipped_probes": skipped,
+            },
+        )
+        for probe, reason in skipped.items():
+            yield _event(
+                "planner",
+                f"Probe skipped: {probe} is not defined for target "
+                f"{target.name}. {reason}",
+                {"probe": probe, "skipped": True, "reason": reason},
+            )
     seq_enabled = (
         sequential
         if sequential is not None
@@ -123,21 +159,21 @@ def run_audit(
     rates: dict[str, dict[str, dict[str, float]]] = {}
     targets: dict[str, tuple[str, str]] = {}
     gaps: dict[str, dict[str, float]] = {}
-    for attribute in ATTRIBUTES:
+    for attribute in attributes:
         table = observational_rates(obs_applicants, obs_responses, attribute)
         rates[attribute] = table
-        target, comparison = choose_target_group(table)
-        targets[attribute] = (target, comparison)
-        gap = observational_gap(table, target, comparison, level)
+        target_group, comparison = choose_target_group(table)
+        targets[attribute] = (target_group, comparison)
+        gap = observational_gap(table, target_group, comparison, level)
         gaps[attribute] = gap
         yield _event(
             "statistician",
-            f"Observational {ATTRIBUTE_LABELS[attribute]}: lowest group {target} "
-            f"({table[target]['rate']:.1%}) vs {comparison} ({table[comparison]['rate']:.1%}); "
+            f"Observational {ATTRIBUTE_LABELS[attribute]}: lowest group {target_group} "
+            f"({table[target_group]['rate']:.1%}) vs {comparison} ({table[comparison]['rate']:.1%}); "
             f"gap {gap['gap']:+.3f} (95% CI {gap['ci_low']:+.3f} to {gap['ci_high']:+.3f})",
             {
                 "attribute": attribute,
-                "target": target,
+                "target": target_group,
                 "comparison": comparison,
                 "rates": table,
                 "gap": gap,
@@ -146,12 +182,12 @@ def run_audit(
 
     # --- single-attribute counterfactual probes ---------------------------
     raw_singles: list[tuple[str, str, str, ProbeResult, Evidence, dict[str, float]]] = []
-    for index, attribute in enumerate(ATTRIBUTES):
-        target, comparison = targets[attribute]
+    for index, attribute in enumerate(attributes):
+        target_group, comparison = targets[attribute]
         probe = prober.probe_attribute_sync(
             model_id=model_id,
             attribute=attribute,
-            target_group=target,
+            target_group=target_group,
             comparison_group=comparison,
             n=int(cfg["n_pairs"]),
             seed=seed + 1000 + index * 31,
@@ -180,17 +216,19 @@ def run_audit(
             iterations=iterations,
             level=level,
         )
-        raw_singles.append((attribute, target, comparison, probe, evidence, gaps[attribute]))
+        raw_singles.append(
+            (attribute, target_group, comparison, probe, evidence, gaps[attribute])
+        )
 
     adjusted = holm_adjust([item[4].p_raw for item in raw_singles])
     singles: list[Finding] = []
-    for (attribute, target, comparison, probe, evidence, gap), p_adj in zip(
+    for (attribute, target_group, comparison, probe, evidence, gap), p_adj in zip(
         raw_singles, adjusted
     ):
         adjusted_evidence = evidence.model_copy(update={"p_adjusted": p_adj})
         finding = make_single_finding(
             attribute,
-            target,
+            target_group,
             comparison,
             adjusted_evidence,
             rates[attribute],
@@ -213,44 +251,54 @@ def run_audit(
         )
 
     # --- intersectional scan ---------------------------------------------
-    cell_probes: list[CellProbe] = prober.probe_intersectional_sync(
-        model_id, int(cfg["intersectional_pairs_per_cell"]), seed + 9000
-    )
-    for event in _drain(prober):
-        yield event
-    obs_cells = intersectional_observational_rates(obs_applicants, obs_responses)
-    cells_payload = [
-        {
-            "target_gender": c.target_gender,
-            "comparison_gender": c.comparison_gender,
-            "age_band": c.age_band,
-            "urban_rural": c.urban_rural,
-            "n": c.n,
-            "b": c.b,
-            "c": c.c,
-        }
-        for c in cell_probes
-    ]
-    all_inter = make_intersectional_findings(
-        cells_payload,
-        obs_cells,
-        iterations=iterations,
-        level=level,
-        alpha=alpha,
-        top_k=None,
-    )
-    inter = all_inter[:5]
-    for finding in inter:
+    all_inter: list[Finding] = []
+    inter: list[Finding] = []
+    if "intersectional" in supported:
+        cell_probes: list[CellProbe] = prober.probe_intersectional_sync(
+            model_id, int(cfg["intersectional_pairs_per_cell"]), seed + 9000
+        )
+        for event in _drain(prober):
+            yield event
+        obs_cells = intersectional_observational_rates(obs_applicants, obs_responses)
+        cells_payload = [
+            {
+                "target_gender": c.target_gender,
+                "comparison_gender": c.comparison_gender,
+                "age_band": c.age_band,
+                "urban_rural": c.urban_rural,
+                "n": c.n,
+                "b": c.b,
+                "c": c.c,
+            }
+            for c in cell_probes
+        ]
+        all_inter = make_intersectional_findings(
+            cells_payload,
+            obs_cells,
+            iterations=iterations,
+            level=level,
+            alpha=alpha,
+            top_k=None,
+        )
+        inter = all_inter[:5]
+        for finding in inter:
+            yield _event(
+                "statistician",
+                f"Intersectional {finding.attribute_or_subgroup}: net "
+                f"{finding.evidence.net_flip_rate:+.4f}, Holm p="
+                f"{finding.evidence.p_adjusted:.2e}",
+                {
+                    "finding_id": finding.id,
+                    "net_flip_rate": finding.evidence.net_flip_rate,
+                    "p_adjusted": finding.evidence.p_adjusted,
+                },
+            )
+    else:
         yield _event(
             "statistician",
-            f"Intersectional {finding.attribute_or_subgroup}: net "
-            f"{finding.evidence.net_flip_rate:+.4f}, Holm p="
-            f"{finding.evidence.p_adjusted:.2e}",
-            {
-                "finding_id": finding.id,
-                "net_flip_rate": finding.evidence.net_flip_rate,
-                "p_adjusted": finding.evidence.p_adjusted,
-            },
+            "Intersectional scan skipped: the target has no urban/rural input, "
+            "so the 12 gender x age x urban/rural cells are not defined.",
+            {"probe": "intersectional", "skipped": True},
         )
 
     findings: list[Finding] = singles + inter
@@ -327,7 +375,17 @@ def run_audit(
         )
 
     mitigation_curve: list[dict[str, Any]] = []
-    if include_mitigation and kept:
+    target_supports_mitigation = (
+        target.supports_mitigation if target is not None else True
+    )
+    if include_mitigation and kept and not target_supports_mitigation:
+        yield _event(
+            "impact",
+            "Mitigation curve skipped: this target does not expose the sandbox "
+            "score-offset endpoint, so an offset sweep would not be comparable.",
+            {"skipped": True, "reason": "target_does_not_support_mitigation"},
+        )
+    if include_mitigation and kept and target_supports_mitigation:
         primary = max(kept, key=lambda f: f.evidence.net_flip_rate)
         try:
             from impact.mitigate import build_curve
@@ -363,6 +421,8 @@ def run_audit(
             "targets": {k: {"target": v[0], "comparison": v[1]} for k, v in targets.items()},
             "gaps": gaps,
             "n_observational": len(obs_applicants),
+            "supported_probes": sorted(supported),
+            "skipped_probes": skipped,
             "intersectional_cells": [
                 {
                     "target_gender": f.target_group.split("|")[0],

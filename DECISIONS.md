@@ -272,3 +272,98 @@ implementation fixes but must not tune those values.
   SQLite databases are migrated in place with an `ALTER TABLE ... ADD COLUMN`
   guarded by `PRAGMA table_info`.
 - No frozen threshold, penalty, `expected_findings.md`, or v1 test was changed.
+
+## D-019 (R3a) Real-data targets: natural models, documented mapping
+- Two public datasets are used: UCI Default of Credit Card Clients (30,000 rows)
+  and UCI Adult (32,561 rows). Both are CC BY 4.0; citations are in
+  `targets/real/README.md` and in each `metrics.json`. The archives are cached
+  under `data/real/raw/` (git-ignored) and canonical CSVs plus trained artifacts
+  are committed so audits and tests are reproducible offline.
+- The models are "natural": logistic regression for credit default and
+  histogram gradient boosting for Adult, seed 42, stratified 80/20 holdout.
+  **The protected attribute `sex` is an ordinary feature.** No fairness-aware
+  preprocessing and no dropped-attribute variant was trained; the instruction was
+  to default to what a practitioner would do, and this is that default. The
+  Adult model also uses `race`.
+- Approval rule is fixed before auditing: `P(favourable) >= 0.5`, score is
+  `P*1000` on a 0-1000 scale. For credit default the favourable label is "no
+  default"; for Adult it is income > 50K. The FairLens materiality threshold is
+  unchanged at 0.02.
+- Canonical-to-dataset mapping is deterministic and documented column by column
+  in `targets/real/README.md`. Numeric fields use a monotone empirical-quantile
+  transform into the training distribution; dataset columns with no canonical
+  source are set to a documented training mode/median. This is feature mapping,
+  not row synthesis: no applicant row is fabricated, and no substitute dataset is
+  generated.
+- `pincode_group`, `name_group`, and the intersectional scan are **unsupported**
+  for both real targets because neither dataset has a pincode/region or name
+  column, and the intersectional cells require urban/rural. The adapters declare
+  this in YAML, the pipeline emits one skip event per probe with the reason, and
+  the report records `supported_probes` and `skipped_probes`. The auditor does
+  not invent values to keep a probe running.
+- Twins are checked against the training domain before scoring. A gender twin
+  must change exactly the mapped `sex` feature (the canonical name also changes,
+  but names are not model inputs). Infeasible pairs are counted and reported in
+  a `prober` event, never silently dropped.
+- Race exists only in Adult and has no canonical field. It is held at the
+  training mode when serving, so the twin audit cannot test race; the Fairlearn
+  baseline measures race on the real holdout instead.
+- Mitigation is disabled for real targets: an offset sweep needs the sandbox's
+  score endpoint, and applying a made-up offset to a real model's probability is
+  not a comparable intervention.
+- The probe population is still the synthetic FairLens generator mapped onto the
+  dataset columns. The model is real; the population is not the dataset's own
+  population. Results are reported with that limitation.
+- No threshold, planted penalty, frozen expectation, or v1 test was changed.
+
+## D-020 (R3b) Real-target reporting: distinguish a null from no power
+- The pre-registration in `expected_findings.md` was committed before the
+  evaluation, in its own commit (`preregister real targets`), as "No expected
+  finding. Report whatever is found, including no material bias."
+- `eval.run_real_eval` runs seeds 1-5 with the unchanged v1 thresholds,
+  correction, pair counts, and bootstrap settings. Mitigation is off because the
+  real targets do not expose the sandbox offset endpoint.
+- Impact per 10,000 is reported as `max(net_flip_rate, 0) * 10,000` for every
+  candidate, not only kept findings, so an immaterial effect is still visible.
+  Only a kept finding is an audit conclusion. This is a reporting convention
+  fixed after the run and does not change any threshold or status.
+- A result with `b = c = 0` is reported as an **inconclusive null**, not as "no
+  material bias", because the probe had no discordant pairs with which to detect
+  an effect. The credit model is in this state: 10,000 twins, zero decision
+  changes, because no mapped score sits close enough to the 500 approval
+  threshold for the roughly 20-point gender shift to cross it.
+- The Adult model is the other case: a significant, consistently directional
+  gender effect of +0.0050 to +0.0120 net flip, below the 0.02 materiality
+  threshold, so every candidate is immaterial and no finding is kept. It is
+  reported as "no material bias under the pre-registered threshold", not as
+  fairness.
+- No threshold, feature, mapping, model, or artifact was changed after seeing
+  the results, and no probe was added to manufacture a finding.
+
+## D-021 (R3c) LLM screener target: fixed protocol, caps, and the unavailable state
+- The LLM target is a third kind of target, not a sandbox model and not a real
+  dataset model. The prompt, the strict JSON contract, the name/region-only
+  twins, the 24-pairs-per-probe plan, and the 300-call/USD 1.00 caps were
+  written into `expected_findings.md` and committed alone (`preregister LLM
+  screener`) before any call was made.
+- Only names and regions vary, one direction each: `name_group` N1 -> N2 and
+  `pincode_group` P1 -> P2. The pools are arbitrary and mixed on purpose. They
+  are an approximation, not a claim about religion, caste, language, or
+  community; the README and the report say so.
+- Temperature 0, 3 repeats, majority outcome, median score. Ties and fewer than
+  two parseable repeats are unresolved: counted, excluded from b/c, reported.
+  Unparseable replies are never defaulted to a decision. Run-to-run variance is
+  a separate metric because a language model is not a stable instrument.
+- 300 calls is 24 pairs per probe; `min_pairs` is 1,000. The run is therefore
+  exploratory and underpowered by construction and cannot keep a finding. This
+  is stated before the run rather than discovered afterwards.
+- Caps are hard limits checked before each call; cache hits are free. Cost is a
+  conservative estimate for the cap, not a bill. A cache key includes model,
+  prompt, temperature, and max tokens, so a config change cannot silently reuse
+  a stale answer.
+- No API key or model was available at run time. We did not fabricate a result:
+  the target reports `unavailable`, the evaluation writes that outcome, and no
+  name or region effect is claimed. The adapter is tested with an injected fake
+  client; there is no mock in the product path.
+- No frozen threshold, planted penalty, v1 expectation, real-data artifact, or
+  existing test was changed.

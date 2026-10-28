@@ -199,6 +199,76 @@ the exact McNemar p-value and seeded bootstrap CI on the pairs actually observed
 The intersectional scan stays fixed-sample. `tests/test_v2_sequential.py`
 compares a sequential run with a fixed-sample run on the same fake scorer.
 
+### Real-data targets (R3a)
+
+Two targets trained on public UCI datasets, with no planted behaviour. The seven
+sandbox models remain the validation suite; real-target results are reported in a
+separate table.
+
+| Target | Data | Model | Holdout accuracy | Holdout AUC |
+|---|---|---|---|---|
+| `uci_credit_default` | UCI Default of Credit Card Clients (30,000 rows, CC BY 4.0) | logistic regression | 0.8083 | 0.7079 |
+| `adult_income` | UCI Adult (32,561 rows, CC BY 4.0) | histogram gradient boosting | 0.8756 | 0.9300 |
+
+```powershell
+# train (downloads and caches UCI data; artifacts are committed)
+.\.venv\Scripts\python -m targets.real.train
+
+# serve both models (default 127.0.0.1:8030)
+.\.venv\Scripts\python -m targets.real.serve
+
+# audit through the YAML adapter
+$body = '{"model_id": 2, "target": "targets/real/adult-income.yaml", "include_mitigation": false}'
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8020/audits `
+  -ContentType 'application/json' -Body $body
+```
+
+The protected attribute `sex` is a natural model feature in both models (D-019).
+Neither dataset has a name or pincode/region column, so `name_group`,
+`pincode_group`, and the intersectional scan are declared unsupported: the
+pipeline skips them, emits one event per skipped probe with the reason, and
+records the skips in the report. Twins are checked against the training feature
+ranges and a gender twin must change exactly `sex`. Fairlearn demographic-parity
+and equalized-odds differences on the same holdout are stored in
+`data/real/artifacts/*.metrics.json` for comparison only.
+
+The model is real; the probe population is the synthetic FairLens generator
+mapped into the dataset's columns, not the dataset's own population. Full
+licences, citations, column mapping, and limitations: `targets/real/README.md`.
+
+### LLM screener target (R3c)
+
+`target: "llm:screener"` routes the audit to an Anthropic model instead of a
+model we wrote. The prompt asks the model to screen one applicant and to reply
+with exactly `{"approved": <bool>, "score": <0-1000>}`. Anything else is a
+parse failure; failures are counted, never replaced with a default.
+
+```powershell
+# set both in this shell only; nothing is written to disk
+$env:ANTHROPIC_API_KEY = "..."
+$env:ANTHROPIC_MODEL = "..."
+
+# exploratory, capped audit (24 pairs per probe, 300 calls, USD 1.00)
+.\.venv\Scripts\python -m eval.run_llm_eval
+```
+
+Only names and regions change between twins: `name_group` N1 -> N2 and
+`pincode_group` P1 -> P2. Every other prompt line is byte-identical and the
+adapter verifies that before scoring. The name and region pools in
+`targets/llm/names.py` are documented approximations and are not a statement
+about anyone's religion, caste, language, or community.
+
+Design choices: temperature 0, 3 repeats per applicant, majority outcome per
+pair, run-to-run variance reported as a separate metric, unparseable replies
+counted, and a disk cache keyed by prompt hash so reruns cost nothing. Hard caps
+of 300 calls and USD 1.00 per audit are checked before each call. With no key
+the target reports `unavailable` and no audit runs; that is a reported outcome,
+not a hidden failure. Full detail: `targets/llm/README.md`.
+
+300 calls is 24 pairs per probe, far below the frozen `min_pairs = 1000`, so an
+LLM result is exploratory and underpowered by construction. It cannot be a kept
+finding. This is fixed in `expected_findings.md` before the run.
+
 ## Tests
 
 ```powershell
@@ -211,12 +281,17 @@ impact arithmetic, certificate chain and tamper detection, number checking, the
 reporter fallback, Streamlit flows (audit, approve/reject, demo, tamper),
 black-box import boundaries, launchers, the shared Plotly theme, and the v2
 audit API, SSE stream, generated types, target adapters, and sequential stopping.
+The R3c tests cover strict JSON parsing, prompt-twin diffing, majority and tie
+handling, the disk cache, repeat variance, call and cost caps, the unavailable
+state, and the `llm:screener` dispatch, all with an injected fake client.
 
 ## Evaluation
 
 ```powershell
 .\.venv\Scripts\python -m eval.run_eval
 .\.venv\Scripts\python -m eval.fairlearn_baseline --n 4000
+.\.venv\Scripts\python -m eval.run_real_eval
+.\.venv\Scripts\python -m eval.run_llm_eval
 .\.venv\Scripts\python -m eval.demo_smoke
 ```
 
@@ -227,6 +302,21 @@ writes `eval/results/results.csv`, `materiality_sensitivity.csv`,
 Fairlearn baseline uses the generator's hidden repayment label, which the
 black-box auditor does not observe; it is an offline comparison, not part of the
 audit. `eval.demo_smoke` is the headless end-to-end check with a real sandbox.
+
+`eval.run_real_eval` audits the two R3a real-data targets on seeds 1-5 with the
+same frozen thresholds and no mitigation. It writes
+`eval/results/real_models.csv` and `real_models.md`, including rejected findings
+with reasons, immaterial findings, impact per 10,000, Fairlearn holdout numbers,
+accuracy, runtime, and the probes that could not be tested. The outcome was
+pre-registered in `expected_findings.md` as "No expected finding."
+
+`eval.run_llm_eval` runs the R3c LLM screener with the operational caps in
+`config.yaml` (300 calls, USD 1.00, 24 pairs per probe, 3 repeats) and writes
+`eval/results/llm_screener.csv`, `llm_screener.md`, and an LLM section in
+`real_models.md`. Every row is labelled exploratory and underpowered because 24
+pairs cannot meet the frozen 1,000-pair minimum. If `ANTHROPIC_API_KEY` or
+`ANTHROPIC_MODEL` is missing, it writes the unavailable outcome and runs no
+audit.
 
 See [report.md](report.md) for results and every miss, [demo_script.md](demo_script.md)
 for the walkthrough, and [slides_outline.md](slides_outline.md) for a five-minute
@@ -267,6 +357,10 @@ the Model 5 miss, are in [DECISIONS.md](DECISIONS.md).
 | `ui/` | Streamlit app, pure HTML components, Plotly theme, CSS |
 | `api/` | v2 FastAPI audit service, SQLite store, SSE stream, TS type generation |
 | `targets/` | v2 YAML target adapters, sandbox validation adapters, probe caps |
+| `targets/real/` | R3a models trained on public UCI data, mapping, serving, adapters |
+| `targets/llm/` | R3c Anthropic screener, prompt, pools, cache, caps, variance |
+| `data/real/` | Cached canonical CSVs and trained artifacts (raw archives ignored) |
+| `data/llm_cache/` | Prompt-hash-keyed LLM responses (git-ignored) |
 | `web/src/api-types.ts` | TypeScript types generated from the OpenAPI schema |
 | `eval/` | Full evaluation, Fairlearn baseline, charts, headless demo smoke |
 | `tests/` | pytest suite, including black-box boundary and v2 API/SSE tests |
@@ -275,6 +369,16 @@ the Model 5 miss, are in [DECISIONS.md](DECISIONS.md).
 
 - Synthetic data and a deliberately simple scoring formula. Results do not
   generalise to a real lender.
+- The R3a real-data models are trained on public data, but the probe population
+  is still the synthetic generator mapped into the dataset's columns. Neither
+  dataset has a name or region column, so two of the three frozen probes and the
+  intersectional scan are unsupported and skipped; age and race are measured only
+  by the Fairlearn holdout baseline.
+- The R3c LLM target is capped at 300 calls, so it can run 24 pairs per probe
+  against a 1,000-pair minimum. It is exploratory and cannot keep a finding. The
+  name and region pools are approximations, and a language model is not a stable
+  measurement instrument even at temperature 0; run-to-run variance is reported
+  separately for that reason.
 - Twins are approximations. Fairness metrics can conflict; a null result is not
   proof of fairness.
 - Model 5's single-attribute gender finding was predicted to be immaterial but

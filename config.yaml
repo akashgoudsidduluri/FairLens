@@ -94,3 +94,18 @@ service:
 
 report:
   max_words: 250
+
+# LLM screener target (R3c). Operational limits only; no audit thresholds.
+# Pricing is an estimate used for the hard cost cap, not a billing record.
+llm:
+  api_key_env: ANTHROPIC_API_KEY
+  model_env: ANTHROPIC_MODEL
+  repeats: 3
+  temperature: 0.0
+  max_tokens: 64
+  max_calls_per_audit: 300
+  max_cost_usd: 1.00
+  input_cost_per_mtok_usd: 3.00
+  output_cost_per_mtok_usd: 15.00
+  cache_dir: data/llm_cache
+  pairs_per_probe: 24

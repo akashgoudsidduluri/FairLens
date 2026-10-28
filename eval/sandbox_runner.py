@@ -70,3 +70,34 @@ def stop_servers(processes: list[subprocess.Popen]) -> None:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             process.kill()
+
+
+def start_real_server() -> tuple[subprocess.Popen, str]:
+    """Start the real-data target service on a free port."""
+
+    port = free_port()
+    url = f"http://127.0.0.1:{port}"
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "targets.real.serve",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        cwd=str(REPO_ROOT),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    deadline = time.time() + 60
+    while True:
+        if time.time() > deadline:
+            stop_servers([process])
+            raise RuntimeError(f"real-data target service did not start at {url}")
+        try:
+            if httpx.get(f"{url}/health", timeout=1).status_code == 200:
+                return process, url
+        except httpx.HTTPError:
+            time.sleep(0.15)

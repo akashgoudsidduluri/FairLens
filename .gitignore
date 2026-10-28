@@ -4,3 +4,5 @@ __pycache__/
 .pytest_cache/
 .env
 data/*.db
+data/real/raw/
+data/llm_cache/

@@ -1,0 +1,54 @@
+# FairLens R3 target: UCI Credit Card Default clients, logistic regression.
+# Trained by `python -m targets.real.train` (seed 42, 80/20 holdout).
+# The adapter posts canonical applicants; the service maps them to the
+# dataset's own columns (see targets/real/README.md).
+name: uci-credit-default
+real_model: uci_credit_default
+family: real
+description: >
+  Logistic regression on the UCI Default of Credit Card Clients dataset.
+  Protected attribute SEX is a natural model feature (D-019).
+base_url: "${FAIRLENS_REAL_URL:-http://127.0.0.1:8030}"
+
+health:
+  path: /health
+
+request:
+  method: POST
+  path: /score_batch
+  headers:
+    Content-Type: application/json
+    Accept: application/json
+  query:
+    model: uci_credit_default
+  body: "${applicants}"
+
+response:
+  items: "$"
+  approved: "approved"
+  score: "score"
+
+limits:
+  probe_cap: 100000
+  rate_limit_per_second: 0
+  max_retries: 3
+  backoff_seconds: 0.25
+  timeout_seconds: 30
+
+auth:
+  type: none
+
+capabilities:
+  supported_probes: [gender]
+  supports_mitigation: false
+  unsupported_probes:
+    pincode_group: "Dataset has no pincode or region column; the model was trained without one."
+    name_group: "Dataset has no applicant-name column; the model was trained without a name."
+    intersectional: "Intersectional cells require urban/rural; the dataset has no such column."
+  unsupported_fields:
+    pincode_group: "not in dataset"
+    name_group: "not in dataset"
+    urban_rural: "not in dataset"
+  used_canonical_fields: [income, loan_amount, credit_score, age, gender]
+  unused_canonical_fields:
+    [employment_years, pincode, name, pincode_group, name_group, urban_rural, age_band, id]

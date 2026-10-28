@@ -256,3 +256,152 @@ audit:
 `statistician` event on a stop. `run_audit(..., target=..., sequential=...)`
 forwards both. Intersectional probes remain fixed-sample; final `Evidence` always
 uses the observed pairs.
+
+## Real-data targets (R3a)
+The seven sandbox models remain the validation suite. R3a adds two targets whose
+behaviour nobody planted, trained on public UCI data.
+
+- `targets/real/datasets.py`: downloads `uci_credit_default` (UCI 350) and
+  `adult_income` (UCI 2) from `archive.ics.uci.edu`, caches archives under
+  `data/real/raw/` (git-ignored), and writes canonical CSVs under `data/real/`
+  (committed). `DatasetUnavailable` names the exact URL, archive path, and
+  extraction layout when offline; it never synthesises rows. `dataset_summary`
+  records rows, licence, citation, DOI, URL, cache path, and sha256.
+- `targets/real/features.py`: one mapping from `Applicant` to dataset columns,
+  used by both serving and feasibility. Numeric fields use a monotone empirical
+  quantile transform into the training distribution recorded in
+  `metrics.json`; columns without a canonical source are documented training
+  constants. `validate_row` checks training ranges and vocabularies.
+  `validate_pair` also requires a gender twin to change exactly `sex` (names are
+  not model inputs). `probe_capabilities` returns supported and unsupported
+  probes with reasons.
+- `targets/real/train.py`: seed 42, stratified 80/20 holdout. Logistic regression
+  for credit default; histogram gradient boosting for Adult. The protected
+  attribute `sex` is a natural feature in both (D-019). Saves joblib artifacts
+  plus `<model>.metrics.json` with holdout accuracy/AUC/approval rate, Fairlearn
+  demographic-parity and equalized-odds differences on the same holdout, ranges,
+  quantile grids, categories, and dataset metadata. Approval rule fixed before
+  auditing: `P(favourable) >= 0.5`, score `P*1000`.
+- `targets/real/models.py`: artifact loading, `score_applicants`, and
+  `RealModelUnavailable` / `InfeasibleApplicant`.
+- `targets/real/serve.py`: FastAPI service, default `127.0.0.1:8030`,
+  `GET /health`, `GET /models`, `POST /score_batch?model=...`. Same
+  `[{approved, score}]` shape as the sandbox.
+- `targets/real/adapter.py`: `RealTargetAdapter(HTTPTargetAdapter)` with
+  dataset-aware `validate_pair`, `supports_mitigation = False`.
+- `targets/real/*.yaml`: `family: real` adapters for both models, resolved by
+  `targets.build_target` (`_adapter_class` dispatches on `family`). The generic
+  YAML path is unchanged.
+
+### Capability-aware probing
+`TargetAdapter` gains `supported_probes` (defaults to all four),
+`unsupported_details`, `supports_mitigation`, and `validate_pair`. The pipeline
+builds the audit plan from `supported_probes`, emits one `planner` event per
+skipped probe with the target's stated reason, restricts observations and
+findings to supported attributes, records `supported_probes`/`skipped_probes` in
+`report.observational`, skips the intersectional scan when undefined, and skips
+mitigation when the target does not support it. `Prober._build_pairs` drops
+infeasible pairs and emits a `prober` event with counts and reasons; the
+denominator is the number of feasible pairs, and `ProbeResult.requested_n`
+keeps the pre-filter request.
+
+### Dataset mapping and unsupported fields
+- `uci_credit_default`: `income -> LIMIT_BAL`, `gender -> SEX`,
+  `age -> AGE`, `credit_score -> EDUCATION` and the payment-delay columns,
+  `loan_amount -> BILL_AMT1..6`, `income/12 -> PAY_AMT1..6`. `MARRIAGE` is a
+  constant. `employment_years`, pincode, name, and urban/rural are unused.
+- `adult_income`: `age`, `gender -> sex`, `credit_score ->
+  education/education_num`, `employment_years -> hours_per_week`. Race,
+  workclass, marital status, occupation, relationship, native country,
+  capital gain/loss, and `fnlwgt` are documented training constants. `income`
+  and `loan_amount` are unused.
+- Both datasets lack a name and a pincode/region column, so `pincode_group`,
+  `name_group`, and the intersectional scan are declared unsupported. They are
+  skipped and reported, never faked. Race exists in Adult but not in the
+  canonical contract: it is held at the training mode when serving and measured
+  only by the Fairlearn holdout baseline.
+- Full source, licence, citation, and mapping: `targets/real/README.md`.
+
+## Real-target evaluation (R3b)
+`eval/run_real_eval.py` (`.venv\Scripts\python -m eval.run_real_eval`) starts
+`targets.real.serve` on a free port, then audits both models on the seeds in
+`config.yaml` (1-5) using the frozen v1 thresholds and `include_mitigation=False`.
+It writes:
+
+- `eval/results/real_models.csv`: one row per model × seed with runtime, probes
+  used, supported/skipped probes, kept/rejected/immaterial counts, maximum
+  candidate impact per 10,000, holdout accuracy/AUC, Fairlearn sex/age/race DP
+  and EO, and the full finding details with reasons.
+- `eval/results/real_models.md`: protocol, headline table, per-seed table,
+  every candidate finding with b/c/net/CI/Holm p/status/reason, a plain
+  statement of what could and could not be tested, and limitations.
+
+Impact is `max(net_flip_rate, 0) * 10,000` for every candidate; only kept
+findings are audit conclusions. The result statement distinguishes a true null
+from an inconclusive null: if no pair is discordant (`b = c = 0`), the report
+says the probe had no power rather than claiming the model is fair.
+
+`expected_findings.md` contains the pre-registration committed before the
+evaluation: "No expected finding. Report whatever is found, including no material
+bias." for both models. No threshold, feature, mapping, or model was changed
+after the results were seen.
+
+Observed result (seeds 1-5): the Adult model produced a significant but
+immaterial gender effect, net flip +0.0050 to +0.0120, in every seed; the credit
+model produced zero discordant pairs in 10,000 twins, so its result is an
+inconclusive null. Neither model produced a kept finding.
+
+## LLM screener target (R3c)
+`targets/llm/` adds a third kind of target: an Anthropic model asked to screen a
+loan applicant. Its decision rules were not written by us and are not visible.
+`build_target("llm:screener", config)` returns an in-process `LLMTargetAdapter`
+(no HTTP hop; each score is already an external call). `targets.build_target`
+dispatches references starting with `llm` before the sandbox and YAML branches.
+
+- `targets/llm/prompt.py`: one prompt per applicant with name, region, age,
+  gender, income, loan amount, credit score, and employment years. It asks for
+  exactly `{"approved": <bool>, "score": <0-1000>}`. `prompt_fields` is the
+  single source of the substituted values; `diff_fields` compares those values so
+  the twin check and the scored string cannot drift apart.
+- `targets/llm/names.py`: documented, deterministic Indian name and region pools.
+  Each name pool mixes several backgrounds; the pools are an approximation and
+  are explicitly not a claim about religion, caste, language, or community.
+- `targets/llm/parsing.py`: strict JSON. `approved` must be a JSON boolean,
+  `score` a finite number in 0..1000, keys exactly the two named keys. Anything
+  else returns `ParseFailure(reason)`; `NaN`/`Infinity` are rejected.
+- `targets/llm/client.py`: `CompletionClient` protocol plus `AnthropicClient`,
+  a thin wrapper over `anthropic.Anthropic().messages.create`. The key is passed
+  in memory from the environment; it is never persisted.
+- `targets/llm/cache.py`: one JSON file per prompt under `data/llm_cache/`
+  (git-ignored), keyed by a SHA-256 of model, prompt, temperature, and max tokens.
+  The file holds one slot per repeat, so reruns reproduce the same samples free.
+- `targets/llm/adapter.py`: `LLMTargetAdapter` with `supported_probes =
+  {name_group, pincode_group}`, `supports_mitigation = False`, repeat majority,
+  median score, parse-failure and unresolved counters, call cap, cost cap,
+  cache-hit counter, and an `unavailable` state. `validate_pair` requires exactly
+  `["name"]` or exactly `["region"]` to change and rejects identical prompts.
+- `targets/llm/variance.py`: per-pair repeat variance, pairs whose repeats
+  disagree, per-applicant disagreement, and mean repeat flip rate.
+
+### Protocol and caps
+Temperature 0; 3 repeats per applicant; a pair is flipped only on the majority of
+its parseable repeats; fewer than 2 parseable repeats or a tie is unresolved and
+excluded from b/c but counted and reported. Caps are checked before every call:
+300 API calls and USD 1.00 per audit (cache hits are free). Cost is estimated
+worst-case before the call and updated from provider usage after it; the price
+table is an estimate for the cap, not a billing record. Reaching a cap raises
+`LLMCapExceeded` and the evaluation records how far it got instead of shrinking
+the sample silently.
+
+### Evaluation (R3c)
+`eval/run_llm_eval.py` runs `name_group` N1 -> N2 and `pincode_group` P1 -> P2,
+24 pairs per probe, one direction each. Holm correction spans the two probes.
+It writes `eval/results/llm_screener.csv`, `llm_screener.md`, and a section
+appended to `real_models.md`, with b/c/net/CI/Holm p, impact per 10,000, the
+variance table, parse failures, unresolved pairs, calls, cost, and cache hits.
+The frozen `min_pairs = 1000` cannot be met under the cap, so every row is
+labelled exploratory and underpowered and no finding is kept: this is fixed in
+`expected_findings.md` before the run. A missing `ANTHROPIC_MODEL` or
+`ANTHROPIC_API_KEY` produces the reported `unavailable` outcome and no audit.
+No API key was present for the committed run, so the recorded result is
+`unavailable`; the adapter is covered by 33 tests that inject a fake client.

@@ -60,6 +60,16 @@ def _holdout_metric(model_name: str) -> str | None:
     return f"holdout accuracy {accuracy:.4f}"
 
 
+ACRONYMS = {"uci": "UCI", "llm": "LLM", "api": "API"}
+
+
+def _pretty_name(model_name: str) -> str:
+    """`uci_credit_default` becomes `UCI Credit Default`, not `Uci ...`."""
+
+    words = model_name.replace("_", " ").split()
+    return " ".join(ACRONYMS.get(word.lower(), word.title()) for word in words)
+
+
 def _real_card(
     model_name: str,
     relative_path: str,
@@ -77,7 +87,7 @@ def _real_card(
     description = " ".join(str(spec.get("description") or "").split())
     return TargetCard(
         id=model_name,
-        label=model_name.replace("_", " ").title(),
+        label=_pretty_name(model_name),
         kind="real",
         family="real",
         target=relative_path,

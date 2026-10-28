@@ -91,6 +91,7 @@ describe("useAuditStream", () => {
 
     expect(result.current.agentEvents).toHaveLength(1);
     expect(result.current.probeEvents).toHaveLength(1);
+    expect(result.current.probeCount).toBe(1);
     expect(result.current.lastEventId).toBe(2);
   });
 
@@ -110,6 +111,7 @@ describe("useAuditStream", () => {
       vi.advanceTimersByTime(100);
     });
     expect(result.current.probeEvents).toHaveLength(2);
+    expect(result.current.probeCount).toBe(2);
   });
 
   it("reconnects from the last event id after a dropped connection", async () => {

@@ -42,6 +42,7 @@ from api.schemas import (
     EndpointCheckRequest,
     EndpointCheckResponse,
     HealthResponse,
+    ServiceMeta,
     StreamEvent,
     TamperRequest,
     TamperResponse,
@@ -143,6 +144,24 @@ def create_app(
     @app.get("/health", response_model=HealthResponse, tags=["service"])
     def health() -> HealthResponse:
         return HealthResponse()
+
+    @app.get("/meta", response_model=ServiceMeta, tags=["service"])
+    def meta() -> ServiceMeta:
+        """Public config values used to label evidence in the UI."""
+
+        audit = cfg.get("audit") or {}
+        sequential = audit.get("sequential") or {}
+        return ServiceMeta(
+            materiality=float(audit.get("materiality", 0.02)),
+            alpha=float(audit.get("alpha", 0.05)),
+            ci_level=float(audit.get("ci_level", 0.95)),
+            bootstrap_iterations=int(audit.get("bootstrap_iterations", 4000)),
+            n_pairs=int(audit.get("n_pairs", 2000)),
+            probe_cap=int((cfg.get("targets") or {}).get("probe_cap", 100000)),
+            sequential_enabled=bool(sequential.get("enabled", False)),
+            sequential_min_pairs=int(sequential.get("min_pairs", 1000)),
+            sequential_check_every=int(sequential.get("check_every", 200)),
+        )
 
     @app.get("/targets", response_model=TargetCatalog, tags=["targets"])
     def targets() -> TargetCatalog:

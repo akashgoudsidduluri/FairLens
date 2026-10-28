@@ -50,7 +50,7 @@ describe("Landing Model Library", () => {
     expect(await screen.findByText("Validation model 1")).toBeInTheDocument();
     expect(screen.getByText("Validation model 7")).toBeInTheDocument();
     expect(screen.getByText("Adult Income")).toBeInTheDocument();
-    expect(screen.getByText("Uci Credit Default")).toBeInTheDocument();
+    expect(screen.getByText("UCI Credit Default")).toBeInTheDocument();
     const library = within(document.getElementById("model-library") as HTMLElement);
     expect(library.getAllByText("LLM screener")).toHaveLength(2);
 

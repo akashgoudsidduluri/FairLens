@@ -168,6 +168,23 @@ class TargetCatalog(ServiceModel):
     service: str = "fairlens-api"
 
 
+class ServiceMeta(ServiceModel):
+    """Public thresholds the UI needs to label evidence and sequential stops.
+
+    Values come from ``config.yaml``. The UI never hardcodes a threshold.
+    """
+
+    materiality: float
+    alpha: float
+    ci_level: float
+    bootstrap_iterations: int
+    n_pairs: int
+    probe_cap: int
+    sequential_enabled: bool
+    sequential_min_pairs: int
+    sequential_check_every: int
+
+
 class EndpointCheckRequest(ServiceModel):
     """Sanity check a connected endpoint before Start Audit is enabled."""
 

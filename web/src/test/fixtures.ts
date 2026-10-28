@@ -1,4 +1,10 @@
-import type { TargetCard, TargetCatalog } from "@/api-types";
+import type {
+  AgentEvent,
+  ProbeEvent,
+  ServiceMeta,
+  TargetCard,
+  TargetCatalog,
+} from "@/api-types";
 
 function baseCard(overrides: Partial<TargetCard>): TargetCard {
   return {
@@ -31,7 +37,7 @@ export function makeCatalog(): TargetCatalog {
   const real: TargetCard[] = [
     baseCard({
       id: "uci_credit_default",
-      label: "Uci Credit Default",
+      label: "UCI Credit Default",
       kind: "real",
       family: "real",
       target: "targets/real/uci-credit-default.yaml",
@@ -83,4 +89,71 @@ export function makeCatalog(): TargetCatalog {
     probe_cap: 300,
   });
   return { targets: [...validation, ...real, llm], service: "fairlens-api" };
+}
+
+export function makeProbe(overrides: Partial<ProbeEvent> = {}): ProbeEvent {
+  const pairIndex = overrides.pair_index ?? 0;
+  const b = overrides.b_running ?? pairIndex;
+  const c = overrides.c_running ?? 0;
+  const n = overrides.n_running ?? pairIndex + 1;
+  return {
+    probe_id: "single-gender-female",
+    phase: "single_attribute",
+    pair_index: pairIndex,
+    changed_field: "gender",
+    original: {
+      id: `orig-${pairIndex}`,
+      income: 420000,
+      gender: "male",
+      age_band: "35-44",
+      urban_rural: "urban",
+      pincode_group: "P1",
+      name_group: "N1",
+    },
+    twin: {
+      id: `twin-${pairIndex}`,
+      income: 420000,
+      gender: "female",
+      age_band: "35-44",
+      urban_rural: "urban",
+      pincode_group: "P1",
+      name_group: "N1",
+    },
+    original_approved: true,
+    twin_approved: false,
+    b_running: b,
+    c_running: c,
+    n_running: n,
+    net_flip_rate_running: (b - c) / n,
+    ci_low_running: 0,
+    ci_high_running: 0.1,
+    ci_method: "normal_approximation",
+    timestamp: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+export function makeAgent(overrides: Partial<AgentEvent> = {}): AgentEvent {
+  return {
+    agent: "planner",
+    message: "Audit plan ready.",
+    payload: {},
+    timestamp: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+export function makeMeta(overrides: Partial<ServiceMeta> = {}): ServiceMeta {
+  return {
+    materiality: 0.02,
+    alpha: 0.05,
+    ci_level: 0.95,
+    bootstrap_iterations: 4000,
+    n_pairs: 2000,
+    probe_cap: 100000,
+    sequential_enabled: false,
+    sequential_min_pairs: 1000,
+    sequential_check_every: 200,
+    ...overrides,
+  };
 }

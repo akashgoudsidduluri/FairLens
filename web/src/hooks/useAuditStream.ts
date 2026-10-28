@@ -29,6 +29,8 @@ export interface AuditStreamState {
   status: StreamStatus;
   agentEvents: AgentEvent[];
   probeEvents: ProbeEvent[];
+  /** Total probe frames received, even after the on-screen buffer is capped. */
+  probeCount: number;
   lastEventId: number;
   reconnects: number;
   error: string | null;
@@ -42,6 +44,7 @@ const initialState: AuditStreamState = {
   status: "connecting",
   agentEvents: [],
   probeEvents: [],
+  probeCount: 0,
   lastEventId: 0,
   reconnects: 0,
   error: null,
@@ -79,6 +82,7 @@ export function useAuditStream(
       const merged = previous.probeEvents.concat(pending);
       return {
         ...previous,
+        probeCount: previous.probeCount + pending.length,
         probeEvents:
           merged.length > MAX_PROBE_EVENTS
             ? merged.slice(merged.length - MAX_PROBE_EVENTS)

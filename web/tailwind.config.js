@@ -37,10 +37,15 @@ export default {
           "0%": { transform: "translateY(-100%)" },
           "100%": { transform: "translateY(400%)" },
         },
+        flip: {
+          "0%": { boxShadow: "0 0 0 0 rgba(251,113,133,0.5)" },
+          "100%": { boxShadow: "0 0 0 14px rgba(251,113,133,0)" },
+        },
       },
       animation: {
         "pulse-line": "pulse-line 1.8s ease-in-out infinite",
         scan: "scan 2.4s linear infinite",
+        flip: "flip 1.1s ease-out 1",
       },
     },
   },

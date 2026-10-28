@@ -15,6 +15,7 @@ import type {
   EndpointCheckRequest,
   EndpointCheckResponse,
   HealthResponse,
+  ServiceMeta,
   TargetCatalog,
   VerifyResponse,
 } from "@/api-types";
@@ -57,6 +58,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<HealthResponse>("/health"),
+
+  /** Public thresholds (materiality, CI level, sequential settings). */
+  meta: () => request<ServiceMeta>("/meta"),
 
   /** Model Library. Capabilities and availability are authoritative server-side. */
   getTargets: () => request<TargetCatalog>("/targets"),

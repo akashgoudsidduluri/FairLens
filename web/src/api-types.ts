@@ -168,6 +168,18 @@ export interface ProbeEvent {
   timestamp?: string;
 }
 
+export interface ServiceMeta {
+  materiality: number;
+  alpha: number;
+  ci_level: number;
+  bootstrap_iterations: number;
+  n_pairs: number;
+  probe_cap: number;
+  sequential_enabled: boolean;
+  sequential_min_pairs: number;
+  sequential_check_every: number;
+}
+
 export interface StreamEvent {
   seq: number;
   kind: "agent" | "probe";

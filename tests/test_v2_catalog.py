@@ -205,6 +205,22 @@ async def test_targets_route_serves_the_catalog(tmp_path):
             }
 
 
+async def test_meta_route_serves_thresholds_from_config(tmp_path):
+    app = create_app(config=_config(tmp_path), audit_fn=_fake_audit)
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/meta")
+            assert response.status_code == 200
+            body = response.json()
+            assert body["materiality"] == 0.02
+            assert body["alpha"] == 0.05
+            assert body["ci_level"] == 0.95
+            assert body["bootstrap_iterations"] == 4000
+            assert body["sequential_min_pairs"] == 1000
+            assert body["sequential_check_every"] == 200
+
+
 async def test_inline_target_spec_starts_an_audit_with_an_http_adapter(tmp_path):
     captured: dict[str, object] = {}
 

@@ -315,3 +315,27 @@ implementation fixes but must not tune those values.
   dataset columns. The model is real; the population is not the dataset's own
   population. Results are reported with that limitation.
 - No threshold, planted penalty, frozen expectation, or v1 test was changed.
+
+## D-020 (R3b) Real-target reporting: distinguish a null from no power
+- The pre-registration in `expected_findings.md` was committed before the
+  evaluation, in its own commit (`preregister real targets`), as "No expected
+  finding. Report whatever is found, including no material bias."
+- `eval.run_real_eval` runs seeds 1-5 with the unchanged v1 thresholds,
+  correction, pair counts, and bootstrap settings. Mitigation is off because the
+  real targets do not expose the sandbox offset endpoint.
+- Impact per 10,000 is reported as `max(net_flip_rate, 0) * 10,000` for every
+  candidate, not only kept findings, so an immaterial effect is still visible.
+  Only a kept finding is an audit conclusion. This is a reporting convention
+  fixed after the run and does not change any threshold or status.
+- A result with `b = c = 0` is reported as an **inconclusive null**, not as "no
+  material bias", because the probe had no discordant pairs with which to detect
+  an effect. The credit model is in this state: 10,000 twins, zero decision
+  changes, because no mapped score sits close enough to the 500 approval
+  threshold for the roughly 20-point gender shift to cross it.
+- The Adult model is the other case: a significant, consistently directional
+  gender effect of +0.0050 to +0.0120 net flip, below the 0.02 materiality
+  threshold, so every candidate is immaterial and no finding is kept. It is
+  reported as "no material bias under the pre-registered threshold", not as
+  fairness.
+- No threshold, feature, mapping, model, or artifact was changed after seeing
+  the results, and no probe was added to manufacture a finding.

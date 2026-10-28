@@ -321,3 +321,32 @@ keeps the pre-filter request.
   canonical contract: it is held at the training mode when serving and measured
   only by the Fairlearn holdout baseline.
 - Full source, licence, citation, and mapping: `targets/real/README.md`.
+
+## Real-target evaluation (R3b)
+`eval/run_real_eval.py` (`.venv\Scripts\python -m eval.run_real_eval`) starts
+`targets.real.serve` on a free port, then audits both models on the seeds in
+`config.yaml` (1-5) using the frozen v1 thresholds and `include_mitigation=False`.
+It writes:
+
+- `eval/results/real_models.csv`: one row per model × seed with runtime, probes
+  used, supported/skipped probes, kept/rejected/immaterial counts, maximum
+  candidate impact per 10,000, holdout accuracy/AUC, Fairlearn sex/age/race DP
+  and EO, and the full finding details with reasons.
+- `eval/results/real_models.md`: protocol, headline table, per-seed table,
+  every candidate finding with b/c/net/CI/Holm p/status/reason, a plain
+  statement of what could and could not be tested, and limitations.
+
+Impact is `max(net_flip_rate, 0) * 10,000` for every candidate; only kept
+findings are audit conclusions. The result statement distinguishes a true null
+from an inconclusive null: if no pair is discordant (`b = c = 0`), the report
+says the probe had no power rather than claiming the model is fair.
+
+`expected_findings.md` contains the pre-registration committed before the
+evaluation: "No expected finding. Report whatever is found, including no material
+bias." for both models. No threshold, feature, mapping, or model was changed
+after the results were seen.
+
+Observed result (seeds 1-5): the Adult model produced a significant but
+immaterial gender effect, net flip +0.0050 to +0.0120, in every seed; the credit
+model produced zero discordant pairs in 10,000 twins, so its result is an
+inconclusive null. Neither model produced a kept finding.

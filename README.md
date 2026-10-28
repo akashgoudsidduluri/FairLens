@@ -254,6 +254,7 @@ audit API, SSE stream, generated types, target adapters, and sequential stopping
 ```powershell
 .\.venv\Scripts\python -m eval.run_eval
 .\.venv\Scripts\python -m eval.fairlearn_baseline --n 4000
+.\.venv\Scripts\python -m eval.run_real_eval
 .\.venv\Scripts\python -m eval.demo_smoke
 ```
 
@@ -264,6 +265,13 @@ writes `eval/results/results.csv`, `materiality_sensitivity.csv`,
 Fairlearn baseline uses the generator's hidden repayment label, which the
 black-box auditor does not observe; it is an offline comparison, not part of the
 audit. `eval.demo_smoke` is the headless end-to-end check with a real sandbox.
+
+`eval.run_real_eval` audits the two R3a real-data targets on seeds 1-5 with the
+same frozen thresholds and no mitigation. It writes
+`eval/results/real_models.csv` and `real_models.md`, including rejected findings
+with reasons, immaterial findings, impact per 10,000, Fairlearn holdout numbers,
+accuracy, runtime, and the probes that could not be tested. The outcome was
+pre-registered in `expected_findings.md` as "No expected finding."
 
 See [report.md](report.md) for results and every miss, [demo_script.md](demo_script.md)
 for the walkthrough, and [slides_outline.md](slides_outline.md) for a five-minute

@@ -8,6 +8,7 @@ import pytest
 from schemas import canonical_json, sha256_canonical
 from trust.certificate import (
     GENESIS_HASH,
+    clear_records,
     fresh_demo_db,
     init_db,
     issue,
@@ -15,6 +16,7 @@ from trust.certificate import (
     tamper_for_demo,
     verify,
 )
+from trust.reset_demo_data import main as reset_main
 
 
 def _payload(i: int = 0):
@@ -131,3 +133,29 @@ def test_empty_or_missing_db_verifies_true(tmp_path):
     assert verify(missing) == (True, None)
     fresh_demo_db(missing)
     assert verify(missing) == (True, None)
+
+
+def test_clear_records_empties_the_chain(db):
+    for i in range(3):
+        issue(_payload(i), f"Auditor {i}", "approve", db)
+
+    assert clear_records(db) == 3
+    assert list_records(db) == []
+    assert verify(db) == (True, None)
+
+
+def test_clear_records_creates_a_missing_store(tmp_path):
+    missing = tmp_path / "not-yet-created.db"
+    assert clear_records(missing) == 0
+    assert missing.exists()
+    assert list_records(missing) == []
+
+
+def test_reset_script_reports_what_it_removed(db, capsys):
+    issue(_payload(), "Asha", "approve", db)
+
+    assert reset_main(["--db", str(db)]) == 0
+    output = capsys.readouterr().out
+    assert "Cleared 1 certificate record" in output
+    assert "audit database was not touched" in output
+    assert list_records(db) == []

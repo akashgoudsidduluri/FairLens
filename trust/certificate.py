@@ -137,6 +137,23 @@ def issue(
     )
 
 
+def clear_records(db_path: str | Path) -> int:
+    """Delete every certificate row and leave an empty, initialized store.
+
+    Returns the number of records that were removed. Missing databases are
+    created empty so a reset is safe before the first certificate is issued.
+    """
+
+    path = init_db(db_path)
+    with _connection(path) as conn:
+        removed = int(
+            conn.execute(f"SELECT COUNT(*) FROM {TABLE}").fetchone()[0]
+        )
+        conn.execute(f"DELETE FROM {TABLE}")
+        conn.commit()
+    return removed
+
+
 def list_records(db_path: str | Path) -> list[Certificate]:
     path = _resolve(db_path)
     if not path.exists():

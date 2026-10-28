@@ -14,7 +14,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from auditor.pipeline import run_audit
@@ -223,13 +223,30 @@ def create_app(
             }
         },
     )
-    async def stream_events(audit_id: str) -> StreamingResponse:
+    async def stream_events(
+        audit_id: str,
+        last_event_id: int | None = Query(
+            default=None,
+            ge=0,
+            description="Resume after this sequence. The Last-Event-ID header also works.",
+        ),
+        last_event_id_header: str | None = Header(
+            default=None, alias="Last-Event-ID"
+        ),
+    ) -> StreamingResponse:
         record = await asyncio.to_thread(audit_store.get_audit, audit_id)
         if record is None:
             raise HTTPException(status_code=404, detail="audit not found")
 
+        resume_from = max(0, int(last_event_id or 0))
+        if last_event_id_header:
+            try:
+                resume_from = max(resume_from, int(last_event_id_header))
+            except ValueError:
+                pass
+
         async def frames() -> AsyncIterator[str]:
-            last_seq = 0
+            last_seq = resume_from
             last_emit = time.monotonic()
             yield "retry: 1000\n\n"
             while True:

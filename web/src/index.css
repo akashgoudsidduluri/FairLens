@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    background-image:
+      radial-gradient(60rem 30rem at 12% -10%, rgba(94, 234, 212, 0.08), transparent 60%),
+      radial-gradient(50rem 26rem at 100% 0%, rgba(56, 189, 248, 0.05), transparent 55%),
+      linear-gradient(180deg, #070b10 0%, #080d13 55%, #060a0e 100%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: rgba(94, 234, 212, 0.28);
+  }
+
+  *:focus-visible {
+    outline: 2px solid #5eead4;
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-xl border border-line bg-panel/80 shadow-panel backdrop-blur;
+  }
+
+  .grid-lines {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  .hash {
+    @apply font-mono text-[11px] tracking-tight text-muted;
+  }
+
+  .eyebrow {
+    @apply font-mono text-[10px] uppercase tracking-[0.22em] text-accent;
+  }
+}
+
+/* Thin forensic scrollbars for event trays. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #24313e transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #24313e;
+  border-radius: 999px;
+}

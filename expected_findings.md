@@ -291,3 +291,62 @@ five intersectional cells). Old results are never replaced. The evaluation
 writes `eval/results/suite_b.csv` and `suite_b.md`, includes a Fairlearn
 comparison on the same data, and reports cells examined, candidates, confirmed,
 MDE by cell size, misses, false alarms before/after the Skeptic, and runtime.
+
+## R5.1 sibling-context merge — second protocol, pre-registered after protocol 1
+
+**Status: a new pre-registration for a second protocol, not a change to the
+section above.** This rule was designed after the protocol-1 results were known:
+the sanity run and Models 9/10 kept 9-11 sibling context cells for one planted
+effect, and Models 12/13 did so on some seeds. No protocol-2 result existed when
+this section was written. It does not change any threshold, penalty, bin, seed,
+panel cell, or the frozen expectations above. Protocol 1 rows in
+`eval/results/suite_b.csv`, `suite_b.csv`-derived numbers, and `suite_b.md` are
+never overwritten; protocol 2 is written to separate files and reported side by
+side.
+
+### The rule, in words
+
+Two kept generalized findings are **sibling contexts** when they share the same
+treatment attribute and treatment level, neither described subgroup contains the
+other, and their confirmation net flip rates are statistically indistinguishable.
+
+Statistically indistinguishable is fixed as a two-sided z-test for the difference
+in net flip rates, using only the fresh confirmation evidence:
+
+> `net = (b - c) / n`, `var = (b + c) / n^2`,
+> `z = (net_i - net_j) / sqrt(var_i + var_j)`,
+> `p = erfc(|z| / sqrt(2))`, indistinguishable when `p >= alpha` (0.05).
+
+Sibling links and the existing nested-subgroup links are combined by transitive
+closure into one cluster. The cluster is reported as one finding naming the
+shared treatment and the **narrowest common context**, which is the intersection
+of every member's context. The intersection may be empty; that names the main
+effect. The primary selection rule is unchanged from protocol 1: the most general
+member is primary unless a specific member's net flip is at least `materiality`
+(0.02) stronger. When the primary is not materially stronger, its description is
+rewritten to the shared treatment and common context; its **evidence remains the
+primary cell's own confirmation sample and is not pooled**. Every other member
+stays visible as `merged`, with a reason naming the sibling test. After a sibling
+merge, nesting is applied again, so a re-described main effect and a materially
+stronger deep cell become one finding rather than two.
+
+Only `status == "kept"` generalized findings participate. Rejected, immaterial,
+and already-merged findings are untouched. This is a failure-to-reject rule, not
+an equivalence test: "indistinguishable" means the confirmation samples do not
+separate the cells at alpha, not that their effects are equal.
+
+### Protocol-2 evaluation commitments
+
+- Re-run Suite B (Models 8-15) on seeds 1-5 at the frozen materiality 0.02, the
+  1%/3% sensitivity, and the Suite A (Models 1-7) generalized rerun. Both clean
+  controls (14 and 15) are included; a new kept finding there is a false alarm.
+- Report protocol 1 and protocol 2 side by side, per model and per seed. The pass
+  criteria are the same table used for protocol 1; this rule does not relax them.
+- Report every miss, including Model 11's income-context miss and Model 14's
+  structurally unreachable rejected-candidate criterion.
+- Four workers. Runtimes are per-audit serial wall-clock times; host-suspension
+  outliers are reported separately and never used as a benchmark.
+- **No tuning after protocol-2 results.** No threshold, bin, seed, panel cell, or
+  rule parameter is changed in response to them.
+- Outputs are `eval/results/suite_b_r51.csv`, `suite_b_r51_fairlearn.csv`, and
+  `suite_b_r51.md`. Protocol-1 files are not rewritten.

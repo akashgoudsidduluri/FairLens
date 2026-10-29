@@ -48,7 +48,13 @@ import httpx
 
 from schemas import Applicant, ModelResponse
 
-from targets.base import ALL_PROBES, ProbeCapExceeded, TargetAdapter, TargetError
+from targets.base import (
+    ALL_PROBES,
+    ALL_TREATMENTS,
+    ProbeCapExceeded,
+    TargetAdapter,
+    TargetError,
+)
 from targets.mapping import MappingError, get_path, load_spec, resolve_template
 
 
@@ -114,6 +120,14 @@ class HTTPTargetAdapter(TargetAdapter):
         declared = capabilities.get("supported_probes")
         self.supported_probes = (
             ALL_PROBES if declared is None else frozenset(str(p) for p in declared)
+        )
+        # Generalized treatments are separate from the frozen single-attribute
+        # probes. A real dataset with no age column leaves age out.
+        declared_treatments = capabilities.get("supported_treatments")
+        self.supported_treatments = (
+            ALL_TREATMENTS
+            if declared_treatments is None
+            else frozenset(str(t) for t in declared_treatments)
         )
         self.unsupported_details = {
             str(key): str(value)

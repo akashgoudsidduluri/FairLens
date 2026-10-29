@@ -40,6 +40,9 @@ auth:
 
 capabilities:
   supported_probes: [gender]
+  # R5 generalized protocol: AGE is a natural model feature, so age twins are
+  # defined. The old frozen protocol (supported_probes) is unchanged.
+  supported_treatments: [gender, age]
   supports_mitigation: false
   unsupported_probes:
     pincode_group: "Dataset has no pincode or region column; the model was trained without one."

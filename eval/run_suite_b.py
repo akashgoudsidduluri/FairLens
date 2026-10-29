@@ -18,6 +18,10 @@ Outputs:
   and after the Skeptic, cells, candidates, confirmed cells, MDE, runtime, the
   materiality sensitivity, the suite A new-vs-old comparison, and the Fairlearn
   comparison.
+
+``--tag r51`` runs the same evaluation under the R5.1 sibling-context merge and
+writes ``suite_b_r51.csv``, ``suite_b_r51_fairlearn.csv``, and
+``suite_b_r51.md``. It never rewrites the protocol-1 files above.
 """
 
 from __future__ import annotations
@@ -618,8 +622,8 @@ CSV_FIELDS = [
 ]
 
 
-def _write_csv(rows: list[dict[str, Any]]) -> Path:
-    path = RESULTS / "suite_b.csv"
+def _write_csv(rows: list[dict[str, Any]], tag: str = "") -> Path:
+    path = RESULTS / f"suite_b{tag}.csv"
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=CSV_FIELDS)
         writer.writeheader()
@@ -641,8 +645,8 @@ def _write_csv(rows: list[dict[str, Any]]) -> Path:
     return path
 
 
-def _write_fairlearn_csv(rows: list[dict[str, Any]]) -> Path:
-    path = RESULTS / "suite_b_fairlearn.csv"
+def _write_fairlearn_csv(rows: list[dict[str, Any]], tag: str = "") -> Path:
+    path = RESULTS / f"suite_b{tag}_fairlearn.csv"
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
@@ -690,13 +694,380 @@ def _old_protocol() -> dict[int, dict[str, Any]]:
     return summary
 
 
+def _load_protocol_rows(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    for row in rows:
+        row["materiality"] = float(row["materiality"])
+        row["kept"] = int(row["kept"])
+        row["rejected"] = int(row["rejected"])
+        row["immaterial"] = int(row["immaterial"])
+        row["merged"] = int(row["merged"])
+        row["false_alarm_before"] = int(row["false_alarm_before"])
+        row["false_alarm_after"] = int(row["false_alarm_after"])
+        row["runtime_s"] = float(row["runtime_s"])
+        row["kept_ids"] = [part for part in (row["kept_ids"] or "").split(";") if part]
+    return rows
+
+
+def _main_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in rows
+        if row["suite"] == "B" and abs(row["materiality"] - 0.02) < 1e-9
+    ]
+
+
+def _mean_range(rows: list[dict[str, Any]], field: str) -> str:
+    if not rows:
+        return "n/a"
+    values = [row[field] for row in rows]
+    return f"{float(np.mean(values)):.1f} ({min(values)}-{max(values)})"
+
+
+def _pass_count(rows: list[dict[str, Any]]) -> str:
+    if not rows:
+        return "n/a"
+    return f"{sum(row['expectation'] == 'PASS' for row in rows)}/{len(rows)}"
+
+
+def _write_r51_markdown(
+    rows: list[dict[str, Any]],
+    fairlearn_rows: list[dict[str, Any]],
+    fairlearn_seed: int,
+    fairlearn_n: int,
+    started_at: str,
+    tag: str,
+) -> Path:
+    """Protocol 2 report: the R5.1 sibling merge next to protocol 1."""
+
+    protocol_1 = _load_protocol_rows(RESULTS / "suite_b.csv")
+    p1_main = _main_rows(protocol_1)
+    p2_main = _main_rows(rows)
+    p2_sensitivity = [
+        row
+        for row in rows
+        if row["suite"] == "B" and abs(row["materiality"] - 0.02) >= 1e-9
+    ]
+    p1_sensitivity = [
+        row
+        for row in protocol_1
+        if row["suite"] == "B" and abs(row["materiality"] - 0.02) >= 1e-9
+    ]
+    suite_a = [
+        row
+        for row in rows
+        if row["suite"] == "A" and abs(row["materiality"] - 0.02) < 1e-9
+    ]
+    suite_a_p1 = [
+        row
+        for row in protocol_1
+        if row["suite"] == "A" and abs(row["materiality"] - 0.02) < 1e-9
+    ]
+    old = _old_protocol()
+    errors = [row for row in rows if row["error"]]
+
+    lines = [
+        "# R5.1 sibling-context merge - protocol 2",
+        "",
+        f"Generated: {started_at}",
+        "",
+        "This is the second protocol, run after the sibling-context rule was "
+        "pre-registered in `expected_findings.md` (R5.1). It was designed after "
+        "protocol 1 was reported, because Models 9/10 kept 9-11 sibling cells for "
+        "one planted effect. No threshold, penalty, bin, seed, or panel cell "
+        "changed. Protocol 1 (`suite_b.csv`, `suite_b.md`) is read for comparison "
+        "and never rewritten.",
+        "",
+        "The rule: two kept generalized findings with the same treatment and level, "
+        "non-nested contexts, and confirmation net flips that a two-sided z-test "
+        "cannot separate (`p >= alpha`, variance `(b+c)/n^2`) are siblings. Sibling "
+        "and nested links are closed transitively; the cluster reports the shared "
+        "treatment and the narrowest common context (the intersection). A specific "
+        "member stays primary only when it is at least `materiality` stronger. "
+        "Evidence is the primary cell's own confirmation sample, not a pooled "
+        "estimate. This is a failure-to-reject rule, not an equivalence test.",
+        "",
+        "## Protocol 1 vs protocol 2 (suite B, 5 seeds, 2%)",
+        "",
+        "| Model | P1 kept mean (range) | P1 PASS | P2 kept mean (range) | P2 PASS | "
+        "P1 false alarms before -> after | P2 false alarms before -> after |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for model_id in SUITE_B:
+        p1 = [row for row in p1_main if row["model_id"] == str(model_id)]
+        p2 = [row for row in p2_main if row["model_id"] == model_id]
+        p1_before = sum(row["false_alarm_before"] for row in p1)
+        p1_after = sum(row["false_alarm_after"] for row in p1)
+        p2_before = sum(row["false_alarm_before"] for row in p2)
+        p2_after = sum(row["false_alarm_after"] for row in p2)
+        lines.append(
+            f"| {model_id} | {_mean_range(p1, 'kept')} | {_pass_count(p1)} | "
+            f"{_mean_range(p2, 'kept')} | {_pass_count(p2)} | "
+            f"{p1_before} -> {p1_after} | {p2_before} -> {p2_after} |"
+        )
+    lines.append(
+        f"| **All** | {_mean_range(p1_main, 'kept')} | {_pass_count(p1_main)} | "
+        f"{_mean_range(p2_main, 'kept')} | {_pass_count(p2_main)} | "
+        f"{sum(row['false_alarm_before'] for row in p1_main)} -> "
+        f"{sum(row['false_alarm_after'] for row in p1_main)} | "
+        f"{sum(row['false_alarm_before'] for row in p2_main)} -> "
+        f"{sum(row['false_alarm_after'] for row in p2_main)} |"
+    )
+
+    lines.extend(
+        [
+            "",
+            "## Per-seed detail (protocol 2)",
+            "",
+            "| Model | Seed | Kept | Kept ids | Expectation | Misses | Notes | Runtime |",
+            "|---|---|---|---|---|---|---|---|",
+        ]
+    )
+    for row in sorted(p2_main, key=lambda item: (item["model_id"], item["seed"])):
+        lines.append(
+            f"| {row['model_id']} | {row['seed']} | {row['kept']} | "
+            f"{', '.join(row['kept_ids']) or 'none'} | {row['expectation']} | "
+            f"{'; '.join(row['misses']) or 'none'} | "
+            f"{'; '.join(row['notes']) or 'none'} | {row['runtime_s']:.1f}s |"
+        )
+
+    lines.extend(["", "## Misses and notes across all seeds", ""])
+    miss_counts: dict[str, int] = {}
+    note_counts: dict[str, int] = {}
+    for row in p2_main:
+        for miss in row["misses"]:
+            miss_counts[miss] = miss_counts.get(miss, 0) + 1
+        for note in row["notes"]:
+            note_counts[note] = note_counts.get(note, 0) + 1
+    if miss_counts:
+        for miss, count in sorted(miss_counts.items(), key=lambda item: (-item[1], item[0])):
+            lines.append(f"- **MISS x{count}**: {miss}")
+    else:
+        lines.append("- No misses.")
+    for note, count in sorted(note_counts.items(), key=lambda item: (-item[1], item[0])):
+        lines.append(f"- Note x{count}: {note}")
+
+    lines.extend(
+        [
+            "",
+            "## Clean controls (Models 14 and 15)",
+            "",
+            "| Model | P1 kept (5 seeds) | P1 false alarms before -> after | "
+            "P2 kept (5 seeds) | P2 false alarms before -> after |",
+            "|---|---|---|---|---|",
+        ]
+    )
+    for model_id in sorted(CLEAN_B):
+        p1 = [row for row in p1_main if row["model_id"] == str(model_id)]
+        p2 = [row for row in p2_main if row["model_id"] == model_id]
+        lines.append(
+            f"| {model_id} | {sum(row['kept'] for row in p1)} | "
+            f"{sum(row['false_alarm_before'] for row in p1)} -> "
+            f"{sum(row['false_alarm_after'] for row in p1)} | "
+            f"{sum(row['kept'] for row in p2)} | "
+            f"{sum(row['false_alarm_before'] for row in p2)} -> "
+            f"{sum(row['false_alarm_after'] for row in p2)} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Materiality sensitivity (in-memory override, same seeds)",
+            "",
+            "| Model | P1 kept 1% | P2 kept 1% | P1 kept 2% | P2 kept 2% | "
+            "P1 kept 3% | P2 kept 3% | P2 PASS 1% | P2 PASS 2% | P2 PASS 3% |",
+            "|---|---|---|---|---|---|---|---|---|---|",
+        ]
+    )
+    for model_id in SUITE_B:
+        cells: list[str] = []
+        for materiality in (0.01, 0.02, 0.03):
+            if materiality == 0.02:
+                p1_cell = [row for row in p1_main if row["model_id"] == str(model_id)]
+                p2_cell = [row for row in p2_main if row["model_id"] == model_id]
+            else:
+                p1_cell = [
+                    row
+                    for row in p1_sensitivity
+                    if row["model_id"] == str(model_id)
+                    and abs(row["materiality"] - materiality) < 1e-9
+                ]
+                p2_cell = [
+                    row
+                    for row in p2_sensitivity
+                    if row["model_id"] == model_id
+                    and abs(row["materiality"] - materiality) < 1e-9
+                ]
+            cells.extend([_mean_range(p1_cell, "kept"), _mean_range(p2_cell, "kept")])
+        passes = []
+        for materiality in (0.01, 0.02, 0.03):
+            source = (
+                p2_main
+                if materiality == 0.02
+                else [
+                    row
+                    for row in p2_sensitivity
+                    if abs(row["materiality"] - materiality) < 1e-9
+                ]
+            )
+            passes.append(_pass_count([row for row in source if row["model_id"] == model_id]))
+        lines.append(f"| {model_id} | " + " | ".join(cells + passes) + " |")
+
+    lines.extend(
+        [
+            "",
+            "The pre-registered materiality is 2%; 1% and 3% are sensitivity runs "
+            "and are never used to pick the best result.",
+            "",
+            "## Suite A rerun (no-regression comparison)",
+            "",
+            "Old-protocol facts come from `eval/results/results.csv` and stay frozen. "
+            "P1 and P2 are both semantic re-checks of the same frozen expectations.",
+            "",
+            "| Model | Old kept mean (range) | P1 kept mean (range) | P2 kept mean (range) | "
+            "P1 PASS | P2 PASS | P2 misses |",
+            "|---|---|---|---|---|---|---|",
+        ]
+    )
+    for model_id in SUITE_A:
+        old_entry = old.get(model_id, {})
+        p1 = [row for row in suite_a_p1 if row["model_id"] == str(model_id)]
+        p2 = [row for row in suite_a if row["model_id"] == model_id]
+        misses = "; ".join(sorted({miss for row in p2 for miss in row["misses"]})) or "none"
+        lines.append(
+            f"| {model_id} | {old_entry.get('mean', float('nan')):.1f} "
+            f"({old_entry.get('range', 'n/a')}) | {_mean_range(p1, 'kept')} | "
+            f"{_mean_range(p2, 'kept')} | {_pass_count(p1)} | {_pass_count(p2)} | "
+            f"{misses} |"
+        )
+
+    slow = [row for row in rows if row["runtime_s"] > 600]
+    serial = [row for row in rows if row["runtime_s"] <= 600]
+    serial_values = [row["runtime_s"] for row in serial]
+    lines.extend(
+        [
+            "",
+            "## Runtimes",
+            "",
+            "Runtimes are per-audit wall-clock times inside a worker, not a "
+            "single-user benchmark and not a sum across workers.",
+            "",
+        ]
+    )
+    if serial_values:
+        lines.append(
+            f"- {len(serial_values)} audits: median **{np.median(serial_values):.1f}s**, "
+            f"range {min(serial_values):.1f}-{max(serial_values):.1f}s."
+        )
+        for suite in ("A", "B"):
+            subset = [row["runtime_s"] for row in serial if row["suite"] == suite]
+            if subset:
+                lines.append(
+                    f"- Suite {suite}: median {np.median(subset):.1f}s "
+                    f"({min(subset):.1f}-{max(subset):.1f}s, n={len(subset)})."
+                )
+    if slow:
+        values = sorted(row["runtime_s"] for row in slow)
+        lines.append(
+            f"- **Excluded as host suspension, not audit compute:** {len(slow)} "
+            f"rows from {values[0]:.0f}s to {values[-1]:.0f}s. Their probe counts, "
+            "seeds, and statistics are unchanged; they are never used as benchmark "
+            "numbers."
+        )
+    else:
+        lines.append("- No audit exceeded 600s, so no host-suspension outliers were excluded.")
+    if fairlearn_rows:
+        lines.append(
+            f"- Fairlearn baseline re-run on the same seeded sample "
+            f"({fairlearn_n:,} applicants, seed {fairlearn_seed}); the inputs are "
+            "identical to protocol 1, so the observational gaps are unchanged."
+        )
+
+    model_11 = [row for row in p2_main if row["model_id"] == 11]
+    kept_11 = sorted({identifier for row in model_11 for identifier in row["kept_ids"]})
+    loan_11 = any("loan_amount-high" in identifier for identifier in kept_11)
+
+    lines.extend(
+        [
+            "",
+            "## Honest limitations",
+            "",
+            "- The sibling rule was designed after protocol-1 results, so it is a "
+            "pre-registered second protocol, not a blind first look. It is reported "
+            "side by side and protocol 1 is not replaced.",
+            "- \"Indistinguishable\" is a failure to reject equality at alpha, not "
+            "an equivalence test; it does not prove the sibling effects are equal.",
+            "- A re-described primary keeps its own confirmation sample. The "
+            "reported evidence is not pooled across sibling cells, and the reason "
+            "string says so.",
+            "- A materially stronger specific member still wins, as in protocol 1; "
+            "the cluster then names that specific context rather than the common "
+            "one.",
+            "- Suite A's new-protocol checks remain semantic re-implementations; the "
+            "frozen old-protocol rows are unchanged.",
+            "- Model 14's pre-registered \"at least one rejected candidate cites "
+            "loan amount\" remains a **miss**: no group candidate reaches the "
+            "Skeptic, so that explanation path is unreachable. This is a gap in the "
+            "pre-registration, not a post-hoc check.",
+        ]
+    )
+    if model_11 and kept_11 and not loan_11:
+        lines.append(
+            "- Model 11 remains a **miss**: the planted `loan_amount=high` context "
+            f"is not in any kept finding; the kept cell was `{kept_11[0]}` on every "
+            "seed. Income and loan amount are correlated in the generator, so "
+            "discovery ranks the high-income context above the pre-registered "
+            "high-loan context. Not retuned."
+        )
+    elif kept_11:
+        lines.append(
+            "- Model 11: the kept cells are "
+            f"{', '.join(kept_11)}; the pre-registered high-loan context is "
+            f"{'present' if loan_11 else 'absent'}."
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Artifacts",
+            "",
+            "- `suite_b_r51.csv` - every protocol-2 audit row (suite, model, seed, "
+            "materiality).",
+            "- `suite_b_r51_fairlearn.csv` - Fairlearn DP/EO for models 8-15 on the "
+            "same seeded sample.",
+            "- `suite_b_r51.md` - this file.",
+            "- `suite_b.csv`, `suite_b_fairlearn.csv`, `suite_b.md` - protocol 1, "
+            "untouched.",
+            "",
+        ]
+    )
+    if errors:
+        lines.extend(["## Errors", ""])
+        for row in errors:
+            lines.append(
+                f"- model {row['model_id']} seed {row['seed']} "
+                f"m={row['materiality']}: {row['error']}"
+            )
+    path = RESULTS / f"suite_b{tag}.md"
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def _write_markdown(
     rows: list[dict[str, Any]],
     fairlearn_rows: list[dict[str, Any]],
     fairlearn_seed: int,
     fairlearn_n: int,
     started_at: str,
+    tag: str = "",
 ) -> Path:
+    if tag:
+        return _write_r51_markdown(
+            rows, fairlearn_rows, fairlearn_seed, fairlearn_n, started_at, tag
+        )
     suite_b_main = [
         row
         for row in rows
@@ -1112,7 +1483,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-sensitivity", action="store_true")
     parser.add_argument("--skip-suite-a", action="store_true")
     parser.add_argument("--skip-fairlearn", action="store_true")
+    parser.add_argument(
+        "--tag",
+        default="",
+        help="output suffix; 'r51' writes suite_b_r51.* and never touches protocol 1",
+    )
     args = parser.parse_args(argv)
+    tag = f"_{args.tag.strip()}" if args.tag.strip() else ""
 
     seeds = [int(value) for value in args.seeds.split(",") if value.strip()]
     models = [int(value) for value in args.models.split(",") if value.strip()]
@@ -1178,7 +1555,7 @@ def main(argv: list[str] | None = None) -> int:
                     + (f" ERROR={row['error']}" if row["error"] else "")
                 )
 
-        csv_path = _write_csv(rows)
+        csv_path = _write_csv(rows, tag)
         print(f"Wrote {csv_path.relative_to(REPO_ROOT)}")
 
         fairlearn_rows: list[dict[str, Any]] = []
@@ -1189,11 +1566,11 @@ def main(argv: list[str] | None = None) -> int:
             fairlearn_rows = _fairlearn(
                 urls[0], fairlearn_n, fairlearn_seed, config
             )
-            fairlearn_path = _write_fairlearn_csv(fairlearn_rows)
+            fairlearn_path = _write_fairlearn_csv(fairlearn_rows, tag)
             print(f"Wrote {fairlearn_path.relative_to(REPO_ROOT)}")
 
         markdown = _write_markdown(
-            rows, fairlearn_rows, fairlearn_seed, fairlearn_n, started_at
+            rows, fairlearn_rows, fairlearn_seed, fairlearn_n, started_at, tag
         )
         print(f"Wrote {markdown.relative_to(REPO_ROOT)}")
         return 0 if all(not row["error"] for row in rows) else 1

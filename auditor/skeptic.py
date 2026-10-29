@@ -17,8 +17,11 @@ Checks
    of a gap explained by legitimate factors.
 7. redundancy (R5 generalized findings): overlapping confirmed cells are merged
    into one primary finding. A cell is redundant when its described subgroup is
-   nested inside another kept cell's subgroup and is not materially stronger.
-   Merged cells stay in the report with ``status="merged"`` and a reason.
+   nested inside another kept cell's subgroup and is not materially stronger, or
+   when it is a sibling context under the same treatment whose confirmation net
+   flips are statistically indistinguishable (R5.1). Sibling clusters collapse to
+   the shared treatment and the narrowest common context. Merged cells stay in the
+   report with ``status="merged"`` and a reason.
 
 Status precedence: a significant but sub-materiality effect is "immaterial",
 never "kept". A directional zero-effect candidate is "rejected".
@@ -26,6 +29,7 @@ never "kept". A directional zero-effect candidate is "rejected".
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from schemas import Check, Evidence, Finding, SkepticVerdict
@@ -245,6 +249,64 @@ def _is_subset(left: dict[str, str], right: dict[str, str]) -> bool:
     return all(right.get(key) == value for key, value in left.items())
 
 
+def _sibling_p_value(left: Finding, right: Finding) -> float:
+    """Two-sided z-test for a difference in confirmation net flip rates.
+
+    Var((b - c) / n) is (b + c) / n^2 under the discordant-count approximation,
+    which is the same variance the confidence interval uses. This is the exact
+    test frozen in ``expected_findings.md`` under R5.1.
+    """
+
+    def variance(finding: Finding) -> float:
+        evidence = finding.evidence
+        return (evidence.b + evidence.c) / (evidence.n**2) if evidence.n else 0.0
+
+    net_left = left.evidence.net_flip_rate
+    net_right = right.evidence.net_flip_rate
+    scale = math.sqrt(variance(left) + variance(right))
+    if scale == 0:
+        return 1.0 if net_left == net_right else 0.0
+    z_value = (net_left - net_right) / scale
+    return math.erfc(abs(z_value) / math.sqrt(2.0))
+
+
+def _are_siblings(left: Finding, right: Finding, alpha: float) -> bool:
+    """Same treatment and level, non-nested contexts, indistinguishable nets."""
+
+    if (
+        left.treatment != right.treatment
+        or left.treatment_level != right.treatment_level
+    ):
+        return False
+    left_group = _subgroup(left)
+    right_group = _subgroup(right)
+    if _is_subset(left_group, right_group) or _is_subset(right_group, left_group):
+        return False
+    return _sibling_p_value(left, right) >= alpha
+
+
+def _common_context(members: list[Finding]) -> dict[str, str]:
+    """The narrowest common context: keys every member pins to the same value."""
+
+    common = dict(members[0].context or {})
+    for member in members[1:]:
+        context = member.context or {}
+        common = {
+            key: value
+            for key, value in common.items()
+            if context.get(key) == value
+        }
+    return common
+
+
+def _describe(primary: Finding, common: dict[str, str]) -> str:
+    base = f"{primary.treatment}={primary.treatment_level} vs {primary.comparison_group}"
+    if not common:
+        return f"{base} (main effect)"
+    context = ", ".join(f"{key}={value}" for key, value in common.items())
+    return f"{base} in {context}"
+
+
 def _select_primary(
     members: list[Finding], materiality: float
 ) -> Finding:
@@ -272,7 +334,14 @@ def _select_primary(
 def merge_redundant(
     findings: list[Finding], config: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    """Merge overlapping kept generalized cells into one primary finding.
+    """Merge overlapping or indistinguishable kept generalized cells.
+
+    Two links form a cluster. A cell is nested when its described subgroup is
+    contained in another kept cell's subgroup. Two cells are siblings when they
+    share the treatment and level, neither subgroup contains the other, and their
+    confirmation net flips are statistically indistinguishable (R5.1). Clusters
+    are re-formed after each merge so a re-described main effect can absorb a
+    separate deep cell in a later pass.
 
     Only ``status == "kept"`` generalized findings participate. Rejected,
     immaterial, and already-merged findings are untouched. Every merge is
@@ -281,105 +350,201 @@ def merge_redundant(
     """
 
     materiality = float(config["audit"]["materiality"])
-    kept = [
-        finding
-        for finding in findings
-        if finding.kind == "generalized" and finding.status == "kept"
-    ]
-    for finding in kept:
-        finding.search.setdefault("redundancy", {"passed": True, "primary": None})
-
-    parent = {finding.id: finding.id for finding in kept}
-
-    def find(identifier: str) -> str:
-        while parent[identifier] != identifier:
-            parent[identifier] = parent[parent[identifier]]
-            identifier = parent[identifier]
-        return identifier
-
-    def union(left: str, right: str) -> None:
-        left_root, right_root = find(left), find(right)
-        if left_root != right_root:
-            parent[right_root] = left_root
-
-    for index, left in enumerate(kept):
-        left_group = _subgroup(left)
-        for right in kept[index + 1 :]:
-            right_group = _subgroup(right)
-            if _is_subset(left_group, right_group) or _is_subset(
-                right_group, left_group
-            ):
-                union(left.id, right.id)
-
-    clusters: dict[str, list[Finding]] = {}
-    for finding in kept:
-        clusters.setdefault(find(finding.id), []).append(finding)
-
+    alpha = float(config["audit"]["alpha"])
     merges: list[dict[str, Any]] = []
-    for members in clusters.values():
-        if len(members) < 2:
-            continue
-        primary = _select_primary(members, materiality)
-        merged = [member for member in members if member.id != primary.id]
-        merged.sort(key=lambda f: (len(_subgroup(f)), f.id))
-        for member in merged:
-            member_group = _subgroup(member)
-            primary_group = _subgroup(primary)
-            member.status = "merged"  # type: ignore[assignment]
-            member.merged_into = primary.id
-            member.search["redundancy"] = {
-                "passed": False,
-                "primary": primary.id,
-                "detail": (
-                    f"subgroup {member_group} overlaps primary {primary.id} "
-                    f"({primary_group}) and is not materially stronger"
-                ),
-            }
-            reason = (
-                f"Merged into primary finding {primary.id} "
-                f"({primary.attribute_or_subgroup}): this cell describes "
-                f"{member_group}, which is nested in the primary's subgroup "
-                f"{primary_group}. It is kept visible but not counted as a "
-                "second bias finding."
+
+    def cluster(kept: list[Finding]) -> list[list[Finding]]:
+        parent = {finding.id: finding.id for finding in kept}
+
+        def find(identifier: str) -> str:
+            while parent[identifier] != identifier:
+                parent[identifier] = parent[parent[identifier]]
+                identifier = parent[identifier]
+            return identifier
+
+        def union(left: str, right: str) -> None:
+            left_root, right_root = find(left), find(right)
+            if left_root != right_root:
+                parent[right_root] = left_root
+
+        for index, left in enumerate(kept):
+            left_group = _subgroup(left)
+            for right in kept[index + 1 :]:
+                right_group = _subgroup(right)
+                nested = _is_subset(left_group, right_group) or _is_subset(
+                    right_group, left_group
+                )
+                if nested or _are_siblings(left, right, alpha):
+                    union(left.id, right.id)
+
+        groups: dict[str, list[Finding]] = {}
+        for finding in kept:
+            groups.setdefault(find(finding.id), []).append(finding)
+        return list(groups.values())
+
+    for finding in findings:
+        if finding.kind == "generalized" and finding.status == "kept":
+            finding.search.setdefault("redundancy", {"passed": True, "primary": None})
+
+    while True:
+        kept = [
+            finding
+            for finding in findings
+            if finding.kind == "generalized" and finding.status == "kept"
+        ]
+        groups = [members for members in cluster(kept) if len(members) >= 2]
+        if not groups:
+            break
+
+        for members in groups:
+            primary = _select_primary(members, materiality)
+            general = min(
+                members, key=lambda f: (len(_subgroup(f)), -f.evidence.n, f.id)
             )
-            member.reason = reason
+            same_treatment = (
+                len({(member.treatment, member.treatment_level) for member in members})
+                == 1
+            )
+            sibling_cluster = same_treatment and any(
+                _are_siblings(left, right, alpha)
+                for index, left in enumerate(members)
+                for right in members[index + 1 :]
+            )
+            primary_group_before = {
+                member.id: _subgroup(member) for member in members
+            }
+            merged = [member for member in members if member.id != primary.id]
+            merged.sort(key=lambda f: (len(_subgroup(f)), f.id))
+
+            materially_stronger = (
+                primary.evidence.net_flip_rate
+                - general.evidence.net_flip_rate
+                >= materiality
+            )
+            common: dict[str, str] = dict(primary.context or {})
+            re_described = False
+            if sibling_cluster and not materially_stronger:
+                common = _common_context(members)
+                if common != dict(primary.context or {}):
+                    primary.context = dict(common)
+                    primary.attribute_or_subgroup = _describe(primary, common)
+                    re_described = True
+
+            for member in merged:
+                member_group = primary_group_before[member.id]
+                primary_group = primary_group_before[primary.id]
+                nested = _is_subset(member_group, primary_group) or _is_subset(
+                    primary_group, member_group
+                )
+                member.status = "merged"  # type: ignore[assignment]
+                member.merged_into = primary.id
+                p_value = None if nested else _sibling_p_value(member, primary)
+                if nested:
+                    detail = (
+                        f"subgroup {member_group} overlaps primary {primary.id} "
+                        f"({primary.attribute_or_subgroup}) and is not materially "
+                        "stronger"
+                    )
+                    reason = (
+                        f"Merged into primary finding {primary.id} "
+                        f"({primary.attribute_or_subgroup}): this cell describes "
+                        f"{member_group}, which overlaps the primary's subgroup "
+                        f"{primary_group}. It is kept visible but not counted as a "
+                        "second bias finding."
+                    )
+                else:
+                    direct = p_value is not None and p_value >= alpha
+                    comparison = (
+                        "statistically indistinguishable from the primary"
+                        if direct
+                        else "statistically indistinguishable from another cell in "
+                        "the same sibling cluster"
+                    )
+                    detail = (
+                        f"sibling context {member_group} shares treatment "
+                        f"{member.treatment}={member.treatment_level} with primary "
+                        f"{primary.id}; confirmation net is {comparison} "
+                        f"(z-test vs primary p={p_value:.3f})"
+                    )
+                    reason = (
+                        f"Merged into primary finding {primary.id} "
+                        f"({primary.attribute_or_subgroup}): this cell is a sibling "
+                        f"context under the same treatment "
+                        f"{member.treatment}={member.treatment_level}, and its "
+                        f"confirmation net is {comparison} (two-sided z vs primary "
+                        f"p={p_value:.3f}). It is kept visible but not counted as a "
+                        "second bias finding."
+                    )
+                member.search["redundancy"] = {
+                    "passed": False,
+                    "primary": primary.id,
+                    "detail": detail,
+                    "sibling": not nested,
+                    "z_p": p_value,
+                }
+                member.reason = reason
+                merges.append(
+                    {
+                        "primary": primary.id,
+                        "merged": member.id,
+                        "reason": reason,
+                        "check": {
+                            "name": "redundancy",
+                            "passed": False,
+                            "detail": detail,
+                        },
+                    }
+                )
+
+            primary.search.setdefault("merged_cells", [])
+            primary.search["merged_cells"] = list(
+                dict.fromkeys(
+                    [*primary.search["merged_cells"], *[m.id for m in merged]]
+                )
+            )
+            primary.search["redundancy"] = {
+                "passed": True,
+                "primary": primary.id,
+                "merged_count": len(primary.search["merged_cells"]),
+                "detail": (
+                    f"primary after merging {len(primary.search['merged_cells'])} "
+                    f"overlapping or sibling confirmed cell(s): "
+                    f"{', '.join(primary.search['merged_cells'])}"
+                ),
+                "sibling_cluster": sibling_cluster,
+                "common_context": dict(common),
+                "re_described": re_described,
+            }
+            if sibling_cluster:
+                primary.search["sibling_merge"] = {
+                    "shared_treatment": primary.treatment,
+                    "shared_level": primary.treatment_level,
+                    "common_context": dict(common),
+                    "members": [member.id for member in members],
+                    "materially_stronger_specific": materially_stronger,
+                    "re_described": re_described,
+                }
+            primary.reason = (
+                primary.reason.rstrip()
+                + f" Merged {len(merged)} overlapping or sibling cell(s) into this "
+                f"primary finding: {', '.join(member.id for member in merged)}."
+            )
+            if re_described:
+                primary.reason += (
+                    " The primary is described as the shared treatment and the "
+                    "narrowest common context; its evidence is the primary cell's "
+                    "own confirmation sample, not a pooled estimate."
+                )
             merges.append(
                 {
                     "primary": primary.id,
-                    "merged": member.id,
-                    "reason": reason,
+                    "merged": None,
+                    "reason": primary.search["redundancy"]["detail"],
                     "check": {
                         "name": "redundancy",
-                        "passed": False,
-                        "detail": member.search["redundancy"]["detail"],
+                        "passed": True,
+                        "detail": primary.search["redundancy"]["detail"],
                     },
                 }
             )
-        primary.search["merged_cells"] = [member.id for member in merged]
-        primary.search["redundancy"] = {
-            "passed": True,
-            "primary": primary.id,
-            "merged_count": len(merged),
-            "detail": (
-                f"primary after merging {len(merged)} overlapping confirmed "
-                f"cell(s): {', '.join(member.id for member in merged)}"
-            ),
-        }
-        primary.reason = (
-            primary.reason.rstrip()
-            + f" Merged {len(merged)} overlapping cell(s) into this primary "
-            f"finding: {', '.join(member.id for member in merged)}."
-        )
-        merges.append(
-            {
-                "primary": primary.id,
-                "merged": None,
-                "reason": primary.search["redundancy"]["detail"],
-                "check": {
-                    "name": "redundancy",
-                    "passed": True,
-                    "detail": primary.search["redundancy"]["detail"],
-                },
-            }
-        )
     return merges

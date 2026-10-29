@@ -160,6 +160,90 @@ def test_rejected_and_immaterial_findings_are_left_alone():
     assert immaterial.merged_into is None
 
 
+def test_indistinguishable_sibling_contexts_merge_to_the_narrowest_context():
+    left = _finding(
+        "gen-age-credit", "age", "45+", {"credit_score": "mid"}, 0.20
+    )
+    right = _finding(
+        "gen-age-loan", "age", "45+", {"loan_amount": "high"}, 0.21
+    )
+    findings = [left, right]
+
+    merge_redundant(findings, _config())
+
+    kept = [finding for finding in findings if finding.status == "kept"]
+    merged = [finding for finding in findings if finding.status == "merged"]
+    assert len(kept) == 1
+    assert len(merged) == 1
+    assert kept[0].context == {}
+    assert "(main effect)" in kept[0].attribute_or_subgroup
+    assert kept[0].evidence.net_flip_rate == 0.20  # not a pooled estimate
+    assert "not a pooled estimate" in kept[0].reason
+    assert kept[0].search["sibling_merge"]["common_context"] == {}
+    assert kept[0].search["merged_cells"] == [merged[0].id]
+    assert merged[0].search["redundancy"]["sibling"] is True
+    assert "sibling context" in merged[0].reason
+
+
+def test_separated_sibling_contexts_stay_separate():
+    left = _finding(
+        "gen-age-credit", "age", "45+", {"credit_score": "mid"}, 0.10
+    )
+    right = _finding(
+        "gen-age-loan", "age", "45+", {"loan_amount": "high"}, 0.30
+    )
+    findings = [left, right]
+
+    merge_redundant(findings, _config())
+
+    assert left.status == "kept"
+    assert right.status == "kept"
+    assert left.merged_into is None
+    assert right.merged_into is None
+
+
+def test_indistinguishable_but_materially_stronger_sibling_stays_specific():
+    left = _finding(
+        "gen-age-credit", "age", "45+", {"credit_score": "mid"}, 0.20
+    )
+    right = _finding(
+        "gen-age-loan", "age", "45+", {"loan_amount": "high"}, 0.25
+    )
+    findings = [left, right]
+
+    merge_redundant(findings, _config())
+
+    kept = [finding for finding in findings if finding.status == "kept"]
+    assert len(kept) == 1
+    assert kept[0].id == right.id
+    assert kept[0].context == {"loan_amount": "high"}
+    assert kept[0].search["sibling_merge"]["materially_stronger_specific"] is True
+    assert kept[0].search["sibling_merge"]["re_described"] is False
+
+
+def test_redescribed_main_effect_absorbs_a_later_deep_cell():
+    left = _finding(
+        "gen-age-credit", "age", "45+", {"credit_score": "high"}, 0.20
+    )
+    right = _finding(
+        "gen-age-employment", "age", "45+", {"employment_years": "high"}, 0.21
+    )
+    deep = _finding(
+        "gen-name-age", "name_group", "N2", {"age": "45+"}, 0.35
+    )
+    findings = [left, right, deep]
+
+    merge_redundant(findings, _config())
+
+    kept = [finding for finding in findings if finding.status == "kept"]
+    assert len(kept) == 1
+    assert kept[0].id == deep.id
+    assert kept[0].context == {"age": "45+"}
+    assert left.status == "merged"
+    assert right.status == "merged"
+    assert left.merged_into == deep.id
+
+
 class _NestedTarget(TargetAdapter):
     """Penalises female applicants only in the 45+ x rural x N2 cell."""
 

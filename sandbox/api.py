@@ -24,13 +24,14 @@ app = FastAPI(
 
 @app.get("/health")
 def health() -> dict[str, object]:
-    return {"status": "ok", "models": 7, "synthetic": True}
+    # The count is public; which model carries which behaviour is not.
+    return {"status": "ok", "models": 15, "synthetic": True}
 
 
 @app.post("/score", response_model=ModelResponse)
 def score(
     applicant: Applicant,
-    model: int = Query(1, ge=1, le=7, description="Black-box model selector"),
+    model: int = Query(1, ge=1, le=15, description="Black-box model selector"),
 ) -> ModelResponse:
     return score_applicant(model, applicant, CONFIG)
 
@@ -38,7 +39,7 @@ def score(
 @app.post("/score_batch", response_model=list[ModelResponse])
 def score_batch_endpoint(
     applicants: list[Applicant],
-    model: int = Query(1, ge=1, le=7, description="Black-box model selector"),
+    model: int = Query(1, ge=1, le=15, description="Black-box model selector"),
 ) -> list[ModelResponse]:
     if len(applicants) > 5000:
         return JSONResponse(  # type: ignore[return-value]

@@ -30,14 +30,32 @@ function baseCard(overrides: Partial<TargetCard>): TargetCard {
   };
 }
 
+function validationCard(index: number): TargetCard {
+  if (index < 15) {
+    return baseCard({
+      id: `sandbox-${index}`,
+      label: `Validation model ${index}`,
+      target: `sandbox:${index}`,
+      model_id: index,
+      metric:
+        index <= 7
+          ? `validation suite A · model ${index}/7`
+          : `validation suite B · model ${index - 7}/7`,
+    });
+  }
+  return baseCard({
+    id: "sandbox-15",
+    label: "Control model 15",
+    target: "sandbox:15",
+    model_id: 15,
+    description: "Synthetic black-box control for validation suite B.",
+    metric: "validation suite B · control B",
+  });
+}
+
 export function makeCatalog(): TargetCatalog {
-  const validation = Array.from({ length: 7 }, (_, index) =>
-    baseCard({
-      id: `sandbox-${index + 1}`,
-      label: `Validation model ${index + 1}`,
-      target: `sandbox:${index + 1}`,
-      model_id: index + 1,
-    }),
+  const validation = Array.from({ length: 15 }, (_, index) =>
+    validationCard(index + 1),
   );
   const real: TargetCard[] = [
     baseCard({
@@ -186,6 +204,141 @@ export function makeReport(overrides: Partial<AuditReport> = {}): AuditReport {
     observational: {},
     ...overrides,
   };
+}
+
+
+function discoveryRow(
+  overrides: Partial<Record<string, unknown>>,
+): Record<string, unknown> {
+  return {
+    cell: "age-45plus",
+    treatment: "age",
+    level: "45+",
+    context: {},
+    source: "main",
+    depth: 0,
+    n: 2000,
+    b: 0,
+    c: 0,
+    dropped: 0,
+    net_flip_rate: 0,
+    p_raw: 1,
+    p_adjusted: 1,
+    mde: 0.099,
+    observed_discordance: 0,
+    testable: true,
+    reason: "",
+    ...overrides,
+  };
+}
+
+/**
+ * A report from the generalized search (R5), with a kept age cell, a merged
+ * deeper cell, and enough discovery rows to exercise the axis selectors.
+ */
+export function makeSearchReport(overrides: Partial<AuditReport> = {}): AuditReport {
+  const discovery = [
+    discoveryRow({ cell: "gen-age-45plus", net_flip_rate: 0, n: 2000 }),
+    discoveryRow({
+      cell: "gen-age-45plus-credit_score-high",
+      context: { credit_score: "high" },
+      depth: 1,
+      net_flip_rate: 0.61,
+      p_adjusted: 1e-12,
+    }),
+    discoveryRow({
+      cell: "gen-age-45plus-credit_score-low",
+      context: { credit_score: "low" },
+      depth: 1,
+      net_flip_rate: 0.02,
+      p_adjusted: 0.4,
+    }),
+    discoveryRow({
+      cell: "gen-age-45plus-gender-female",
+      context: { gender: "female" },
+      depth: 1,
+      net_flip_rate: 0.1,
+      p_adjusted: 0.02,
+    }),
+    discoveryRow({
+      cell: "gen-age-45plus-credit_score-high-gender-female",
+      context: { credit_score: "high", gender: "female" },
+      depth: 2,
+      net_flip_rate: 0.62,
+      p_adjusted: 1e-9,
+    }),
+    discoveryRow({
+      cell: "gen-age-45plus-credit_score-low-age_band-45plus",
+      context: { credit_score: "low", age_band: "45+" },
+      depth: 2,
+      net_flip_rate: 0.03,
+      p_adjusted: 0.2,
+    }),
+    discoveryRow({
+      cell: "gen-age-35-44-credit_score-high",
+      level: "35-44",
+      context: { credit_score: "high" },
+      depth: 1,
+      net_flip_rate: 0,
+    }),
+  ];
+
+  const kept = makeFinding({
+    id: "gen-age-45plus-credit_score-high",
+    kind: "generalized",
+    attribute_or_subgroup: "age=45+ | credit_score=high",
+    target_group: "45+",
+    comparison_group: "<35",
+    treatment: "age",
+    treatment_level: "45+",
+    context: { credit_score: "high" },
+    status: "kept",
+    reason: "Kept: 400 fresh confirmation pairs and the income-matched re-test.",
+  });
+  const merged = makeFinding({
+    id: "gen-age-45plus-credit_score-high-gender-female",
+    kind: "generalized",
+    attribute_or_subgroup: "age=45+ | credit_score=high, gender=female",
+    target_group: "45+",
+    comparison_group: "<35",
+    treatment: "age",
+    treatment_level: "45+",
+    context: { credit_score: "high", gender: "female" },
+    status: "merged",
+    merged_into: kept.id,
+    reason: "Merged: subgroup nested inside a kept cell.",
+  });
+
+  return makeReport({
+    model_id: 8,
+    findings: [kept, merged],
+    observational: {
+      search: {
+        plan: {
+          treatments: ["age"],
+          skipped_treatments: {},
+          cells: 7,
+          cells_by_source: { main: 1, depth1: 4, deep: 2 },
+          exhaustive_cells: 109,
+          planned_applicants: 68800,
+          probe_cap: 100000,
+        },
+        cells_examined: 7,
+        cells_tested: 7,
+        cells_not_testable: [],
+        phase_a_pairs: 14000,
+        phase_b_pairs: 800,
+        discovery_results: discovery,
+        candidates: [{ cell: "gen-age-45plus-credit_score-high" }, { cell: "x" }],
+        confirmed: [{ cell: "gen-age-45plus-credit_score-high" }],
+        mde_by_cell_size: [
+          { n: 200, mde: 0.099 },
+          { n: 1000, mde: 0.044 },
+        ],
+      },
+    },
+    ...overrides,
+  });
 }
 
 

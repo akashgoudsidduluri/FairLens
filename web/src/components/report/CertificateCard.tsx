@@ -29,7 +29,7 @@ export function CertificateCard({
         "rounded-xl border bg-panel/70 p-4",
         broken ? "border-danger/60" : "border-line/70",
       )}
-      aria-label={`Certificate ${certificate.index}`}
+      aria-label={`Audit Record ${certificate.index}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">

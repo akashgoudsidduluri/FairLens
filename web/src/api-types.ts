@@ -13,6 +13,7 @@ export interface AuditCreateRequest {
   api_url?: string | null;
   target?: string | null;
   seed?: number | null;
+  search?: boolean | null;
   include_mitigation?: boolean;
   include_narrative?: boolean;
   sequential?: boolean | null;
@@ -121,6 +122,7 @@ export interface EvidenceReport {
   generated_at: string;
   sandbox: SandboxEvidence;
   real: RealEvidence;
+  suite_b: SuiteBEvidence;
 }
 
 export interface EvidenceSource {
@@ -136,16 +138,21 @@ export interface FairlearnEvidence {
 
 export interface Finding {
   id: string;
-  kind: "single_attribute" | "intersectional";
+  kind: "single_attribute" | "intersectional" | "generalized";
   attribute_or_subgroup: string;
   target_group: string;
   comparison_group: string;
   evidence: Evidence;
   observational_gap: number;
   observational_rates?: Record<string, number>;
-  status: "candidate" | "kept" | "rejected" | "immaterial";
+  status: "candidate" | "kept" | "rejected" | "immaterial" | "merged";
   reason?: string;
   matched_evidence?: Evidence | null;
+  treatment?: string | null;
+  treatment_level?: string | null;
+  context?: Record<string, string>;
+  search?: Record<string, unknown>;
+  merged_into?: string | null;
 }
 
 export interface HTTPValidationError {
@@ -170,7 +177,7 @@ export interface ImpactEstimate {
 
 export interface ProbeEvent {
   probe_id: string;
-  phase: "single_attribute" | "intersectional" | "matched_retest";
+  phase: "single_attribute" | "intersectional" | "matched_retest" | "discovery" | "confirmation";
   pair_index: number;
   changed_field: string;
   original: Record<string, unknown>;
@@ -285,6 +292,39 @@ export interface StreamEvent {
   seq: number;
   kind: "agent" | "probe";
   data: AgentEvent | ProbeEvent;
+}
+
+export interface SuiteBEvidence {
+  models: SuiteBModelEvidence[];
+  runs: number;
+  expectation_passed: number;
+  expectation_total: number;
+  markdown: string;
+  sources: EvidenceSource[];
+}
+
+export interface SuiteBModelEvidence {
+  model_id: number;
+  runs: number;
+  expectation_passed: number;
+  expectation_total: number;
+  kept_mean: number;
+  kept_min: number;
+  kept_max: number;
+  candidates_mean: number;
+  confirmed_mean: number;
+  cells_examined: number;
+  false_alarm_before?: number | null;
+  false_alarm_after?: number | null;
+  runtime_mean_s: number;
+  mde_n200?: number | null;
+  mde_n1000?: number | null;
+  kept_ids: string[];
+  misses: string[];
+  notes: string[];
+  dose_response: string[];
+  max_dp_gap?: number | null;
+  max_dp_attribute?: string;
 }
 
 export interface TamperRequest {

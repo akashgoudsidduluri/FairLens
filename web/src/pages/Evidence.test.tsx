@@ -66,6 +66,45 @@ function payload(): EvidenceReport {
         },
       ],
     },
+    suite_b: {
+      runs: 2,
+      expectation_passed: 2,
+      expectation_total: 2,
+      markdown:
+        "# Suite B and the generalized protocol (R5 Step 7)\n\nLimitations stay attached.",
+      sources: [
+        { path: "eval/results/suite_b.csv", present: true },
+        { path: "eval/results/suite_b_fairlearn.csv", present: true },
+        { path: "eval/results/suite_b.md", present: true },
+      ],
+      models: [
+        {
+          model_id: 8,
+          runs: 2,
+          expectation_passed: 2,
+          expectation_total: 2,
+          kept_mean: 1,
+          kept_min: 1,
+          kept_max: 1,
+          candidates_mean: 16,
+          confirmed_mean: 16,
+          cells_examined: 110,
+          false_alarm_before: 54,
+          false_alarm_after: 2,
+          runtime_mean_s: 61,
+          mde_n200: 0.099,
+          mde_n1000: 0.044,
+          kept_ids: ["gen-age-45plus-credit_score-high"],
+          misses: [],
+          notes: [
+            "kept age finding is context-specific, not the pre-registered main effect",
+          ],
+          dose_response: ["45:+0.0000; 55:+0.6100"],
+          max_dp_gap: 0.31,
+          max_dp_attribute: "age_band",
+        },
+      ],
+    },
     real: {
       markdown: "# Real-data target results\n\n**Status: evaluated after pre-registration.**",
       sources: [
@@ -161,6 +200,22 @@ describe("Evidence page", () => {
     expect(screen.getByText(/Status: evaluated after pre-registration/)).toBeInTheDocument();
     expect(screen.getByText("eval/results/summary.md")).toBeInTheDocument();
     expect(screen.getByText("missing")).toBeInTheDocument();
+  });
+
+  it("shows suite B kept findings, confirmation counts, and the Fairlearn gap", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /treatment × context, discovered then confirmed/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("2/2 met")).toBeInTheDocument();
+    expect(
+      screen.getByText(/gen-age-45plus-credit_score-high/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/context-specific, not the pre-registered main effect/)).toBeInTheDocument();
+    expect(screen.getAllByText(/suite_b\.md/).length).toBeGreaterThan(0);
   });
 
   it("shows a retry state when the API fails", async () => {

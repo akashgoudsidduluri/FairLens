@@ -40,15 +40,15 @@ def _config(tmp_path):
 # --------------------------------------------------------------------- catalog
 
 
-def test_catalog_has_seven_validation_models_two_real_and_one_llm():
+def test_catalog_has_fifteen_validation_models_two_real_and_one_llm():
     catalog = build_catalog(load_config(), environ={})
-    assert len(catalog.targets) == 10
+    assert len(catalog.targets) == 18
     validation = [card for card in catalog.targets if card.kind == "validation"]
     real = [card for card in catalog.targets if card.kind == "real"]
     llm = [card for card in catalog.targets if card.kind == "llm"]
 
     assert [card.target for card in validation] == [
-        f"sandbox:{index}" for index in range(1, 8)
+        f"sandbox:{index}" for index in range(1, 16)
     ]
     assert all(card.supported_probes for card in validation)
     assert all(not card.unsupported_probes for card in validation)
@@ -59,6 +59,26 @@ def test_catalog_has_seven_validation_models_two_real_and_one_llm():
     assert [card.model_id for card in real] == [1, 2]
     assert len(llm) == 1
     assert llm[0].target == "llm:screener"
+
+
+def test_suite_b_cards_are_labelled_and_control_b_is_named():
+    catalog = build_catalog(load_config(), environ={})
+    validation = [card for card in catalog.targets if card.kind == "validation"]
+
+    suite_a = [card for card in validation if card.model_id <= 7]
+    suite_b = [card for card in validation if card.model_id >= 8]
+    assert all("suite A" in (card.metric or "") for card in suite_a)
+    assert all("suite B" in (card.metric or "") for card in suite_b)
+
+    control = next(card for card in validation if card.model_id == 15)
+    assert control.label == "Control model 15"
+    assert "control B" in (control.metric or "")
+    assert "no group term" in control.description
+    assert all(
+        "suite B" in card.description
+        for card in suite_b
+        if card.model_id != 15
+    )
 
 
 def test_real_cards_report_unsupported_probes_from_target_yaml():
@@ -199,7 +219,7 @@ async def test_targets_route_serves_the_catalog(tmp_path):
             response = await client.get("/targets")
             assert response.status_code == 200
             body = response.json()
-            assert len(body["targets"]) == 10
+            assert len(body["targets"]) == 18
             assert body["targets"][-1]["kind"] == "llm"
             assert body["targets"][-1]["availability"]["status"] in {
                 "available",

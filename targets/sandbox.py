@@ -1,8 +1,9 @@
-"""Validation adapters for the seven synthetic sandbox models.
+"""Validation adapters for the fifteen synthetic sandbox models.
 
 Each ``targets/sandbox/model-N.yaml`` inherits from ``_sandbox.yaml`` and only
-changes the ``model`` query parameter. The adapter does not import the sandbox
-scoring code; it is an HTTP client like any other target.
+changes the ``model`` query parameter. Models 1-7 are validation suite A; models
+8-15 are validation suite B (15 is the clean control). The adapter does not
+import the sandbox scoring code; it is an HTTP client like any other target.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from targets.base import apply_probe_cap
 from targets.http import HTTPTargetAdapter
 
 SANDBOX_DIR = Path(__file__).resolve().parent / "sandbox"
-SANDBOX_MODELS = tuple(range(1, 8))
+SANDBOX_MODELS = tuple(range(1, 16))
 
 
 def load_sandbox_target(

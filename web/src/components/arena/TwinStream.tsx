@@ -23,6 +23,8 @@ const PHASE_LABEL: Record<ProbeEvent["phase"], string> = {
   single_attribute: "single attribute",
   intersectional: "combined cells",
   matched_retest: "matched retest",
+  discovery: "discovery (Phase A)",
+  confirmation: "confirmation (Phase B)",
 };
 
 function displayValue(key: string, value: unknown): string {

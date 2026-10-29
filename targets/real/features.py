@@ -331,6 +331,12 @@ def validate_pair(
                 "gender twin changed mapped features "
                 f"{changed or 'none'}; expected exactly ['sex']"
             )
+    elif attribute == "age":
+        if changed != ["age"]:
+            return False, (
+                "age twin changed mapped features "
+                f"{changed or 'none'}; expected exactly ['age']"
+            )
     elif not changed:
         return False, f"{attribute} twin changed no mapped feature"
     return True, ""
@@ -339,6 +345,9 @@ def validate_pair(
 def probe_capabilities(model: str) -> dict[str, Any]:
     return {
         "supported_probes": ["gender"],
+        # R5 generalized protocol: age is present in both datasets and maps to
+        # a real model feature, so an age twin is a valid treatment.
+        "supported_treatments": ["gender", "age"],
         "unsupported_probes": {
             key: value for key, value in UNSUPPORTED_PROBE_REASONS.items()
         },

@@ -8,6 +8,7 @@ Audit execution and storage are injected in tests through ``create_app``.
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import time
 import uuid
@@ -68,6 +69,28 @@ from targets.base import apply_probe_cap
 from targets.http import HTTPTargetAdapter
 
 HEARTBEAT_SECONDS = 15.0
+
+
+def _audit_config(
+    config: dict[str, Any], model_id: int, search: bool | None
+) -> dict[str, Any]:
+    """Return the config this audit runs with.
+
+    Suite B models (8-15) default to the generalized search; every other target
+    keeps the frozen single/intersectional protocol unless ``search=True`` is
+    explicit. The shared service config is never mutated: a copy is made only
+    when the flag has to change.
+    """
+
+    enabled = bool(
+        ((config.get("audit") or {}).get("search") or {}).get("enabled", False)
+    )
+    wanted = search if search is not None else 8 <= model_id <= 15
+    if not wanted or enabled:
+        return config
+    updated = copy.deepcopy(config)
+    updated.setdefault("audit", {}).setdefault("search", {})["enabled"] = True
+    return updated
 
 
 def _sse(event: str, data: dict[str, Any], event_id: int | None = None) -> str:
@@ -226,9 +249,9 @@ def create_app(
         tags=["audits"],
     )
     def start_audit(request: AuditCreateRequest) -> AuditCreated:
-        if request.model_id > 7:
+        if request.model_id > 15:
             raise HTTPException(
-                status_code=422, detail="model_id must be between 1 and 7"
+                status_code=422, detail="model_id must be between 1 and 15"
             )
         model_id = request.model_id
         target_ref = (request.target or "").strip() or None
@@ -304,6 +327,7 @@ def create_app(
             include_narrative=request.include_narrative,
             sequential=sequential,
             target=adapter,
+            config=_audit_config(cfg, model_id, request.search),
         )
         return AuditCreated(
             id=audit_id,

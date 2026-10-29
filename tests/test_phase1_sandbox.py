@@ -176,7 +176,7 @@ def test_model6_noise_reproducible_and_balanced(sample):
 def test_api_health_score_batch_and_validation(sample):
     applicants, _ = sample
     client = TestClient(app)
-    assert client.get("/health").json()["models"] == 7
+    assert client.get("/health").json()["models"] == 15
     r = client.post("/score?model=1", json=applicants[0].model_dump())
     assert r.status_code == 200
     body = r.json()
@@ -186,7 +186,10 @@ def test_api_health_score_batch_and_validation(sample):
     )
     assert batch.status_code == 200
     assert len(batch.json()) == 10
-    assert client.post("/score?model=8", json=applicants[0].model_dump()).status_code == 422
+    # Models 8-15 (suite B) are now served; 16 remains out of range.
+    assert client.post("/score?model=8", json=applicants[0].model_dump()).status_code == 200
+    assert client.post("/score?model=15", json=applicants[0].model_dump()).status_code == 200
+    assert client.post("/score?model=16", json=applicants[0].model_dump()).status_code == 422
     assert client.get("/health").json()["synthetic"] is True
 
 

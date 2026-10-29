@@ -77,7 +77,7 @@ export default function App() {
                   className="hidden items-center gap-1.5 rounded-md border border-line px-2.5 py-1 font-mono text-[10px] text-muted transition-colors hover:border-accent/45 hover:text-accent sm:inline-flex"
                 >
                   <Hash className="h-3 w-3" aria-hidden="true" />
-                  certificates
+                  audit records
                 </Link>
                 <Badge variant="accent">v4 · probe arena</Badge>
                 <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-muted lg:block">

@@ -1,0 +1,6 @@
+base: _sandbox.yaml
+name: sandbox-model-13
+description: Synthetic sandbox model 13 (suite B)
+request:
+  query:
+    model: 13

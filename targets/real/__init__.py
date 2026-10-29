@@ -1,7 +1,7 @@
 """R3 real-data targets: two models trained on public UCI datasets.
 
-The seven synthetic sandbox models remain the validation suite. These targets
-are the out-of-sample test: nobody planted their behaviour.
+The synthetic sandbox models remain validation suite A (and, from R5, suite B).
+These targets are the out-of-sample test: nobody planted their behaviour.
 
 Use ``targets.real.train`` to build artifacts, ``targets.real.serve`` to expose
 them over HTTP, and ``targets/real/*.yaml`` with ``build_target`` to audit them.

@@ -52,6 +52,7 @@ class AuditJobManager:
         include_narrative: bool,
         sequential: bool,
         target: Any = None,
+        config: dict[str, Any] | None = None,
     ) -> None:
         self._executor.submit(
             self._run,
@@ -63,6 +64,7 @@ class AuditJobManager:
             include_narrative,
             sequential,
             target,
+            config,
         )
 
     def _run(
@@ -75,6 +77,7 @@ class AuditJobManager:
         include_narrative: bool,
         sequential: bool,
         target: Any,
+        config: dict[str, Any] | None = None,
     ) -> None:
         try:
             self.store.mark_running(audit_id)
@@ -92,7 +95,7 @@ class AuditJobManager:
             generator = self.audit_fn(
                 model_id,
                 api_url,
-                self.config,
+                config or self.config,
                 seed,
                 include_mitigation=include_mitigation,
                 include_narrative=include_narrative,

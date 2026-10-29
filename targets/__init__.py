@@ -1,6 +1,6 @@
 """Target adapters for FairLens v2 and R3.
 
-``build_target`` accepts ``sandbox:N`` (the validation adapters for the seven
+``build_target`` accepts ``sandbox:N`` (the validation adapters for the fifteen
 synthetic models), ``llm:screener`` (the R3c LLM target), or a
 repository-relative path to a YAML adapter.
 """

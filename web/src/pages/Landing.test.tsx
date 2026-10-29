@@ -47,21 +47,27 @@ describe("Landing Model Library", () => {
     startAudit.mockReset();
   });
 
-  it("groups seven validation models, two real models, and the LLM screener", async () => {
+  it("groups both validation suites, two real models, and the LLM screener", async () => {
     getTargets.mockResolvedValue(makeCatalog());
     renderLanding();
 
     expect(await screen.findByText("Validation model 1")).toBeInTheDocument();
     expect(screen.getByText("Validation model 7")).toBeInTheDocument();
+    expect(screen.getByText("Validation model 8")).toBeInTheDocument();
+    expect(screen.getByText("Control model 15")).toBeInTheDocument();
     expect(screen.getByText("Adult Income")).toBeInTheDocument();
     expect(screen.getByText("UCI Credit Default")).toBeInTheDocument();
     const library = within(document.getElementById("model-library") as HTMLElement);
     expect(library.getAllByText("LLM screener")).toHaveLength(2);
 
-    expect(screen.getAllByText("validation suite")).toHaveLength(7);
+    expect(screen.getAllByText("validation suite")).toHaveLength(15);
     expect(screen.getAllByText("real model")).toHaveLength(2);
     expect(screen.getByText("unavailable")).toBeInTheDocument();
-    expect(screen.getAllByText("configured")).toHaveLength(7);
+    expect(screen.getAllByText("configured")).toHaveLength(15);
+    expect(
+      screen.getByText("validation suite B · model 1/7"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("validation suite B · control B")).toBeInTheDocument();
   });
 
   it("keeps Start Audit disabled only for the unavailable LLM target", async () => {
@@ -71,7 +77,7 @@ describe("Landing Model Library", () => {
 
     const library = within(document.getElementById("model-library") as HTMLElement);
     const buttons = library.getAllByRole("button", { name: /start audit/i });
-    expect(buttons).toHaveLength(10);
+    expect(buttons).toHaveLength(18);
     expect(buttons.filter((button) => button.hasAttribute("disabled"))).toHaveLength(1);
   });
 

@@ -1,0 +1,6 @@
+base: _sandbox.yaml
+name: sandbox-model-8
+description: Synthetic sandbox model 8 (suite B)
+request:
+  query:
+    model: 8

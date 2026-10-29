@@ -167,7 +167,7 @@ async def test_unknown_audit_and_invalid_model(client_factory):
     _, client = await client_factory()
     assert (await client.get("/audits/nope")).status_code == 404
     assert (await client.get("/audits/nope/events")).status_code == 404
-    invalid = await client.post("/audits", json={"model_id": 8})
+    invalid = await client.post("/audits", json={"model_id": 16})
     assert invalid.status_code == 422
 
 
@@ -325,11 +325,55 @@ def _capturing_audit(seen):
             api_url=api_url,
             target=target,
             sequential=sequential,
+            search_enabled=bool(
+                ((config.get("audit") or {}).get("search") or {}).get(
+                    "enabled", False
+                )
+            ),
         )
         yield AgentEvent(agent="planner", message="Capturing audit.")
         return _report(int(model_id), config)
 
     return audit
+
+
+def test_suite_b_audits_enable_the_generalized_search_in_a_copy():
+    from api.app import _audit_config
+
+    config = load_config()
+    assert config["audit"]["search"]["enabled"] is False
+
+    suite_b = _audit_config(config, 8, None)
+    assert suite_b["audit"]["search"]["enabled"] is True
+    assert _audit_config(config, 15, None)["audit"]["search"]["enabled"] is True
+    # Suite A and connected targets keep the frozen protocol by default.
+    assert _audit_config(config, 7, None) is config
+    assert _audit_config(config, 2, None) is config
+    # An explicit request can turn it on or off.
+    assert _audit_config(config, 2, True)["audit"]["search"]["enabled"] is True
+    assert _audit_config(config, 8, False) is config
+    # The shared service config is never mutated.
+    assert config["audit"]["search"]["enabled"] is False
+
+
+async def test_suite_b_model_runs_with_the_generalized_config(client_factory):
+    seen: dict = {}
+    _, client = await client_factory(_capturing_audit(seen))
+    created = await client.post(
+        "/audits",
+        json={
+            "model_id": 8,
+            "target": "sandbox:8",
+            "include_mitigation": False,
+            "include_narrative": False,
+        },
+    )
+    assert created.status_code == 202
+    record = await _wait_for(client, created.json()["id"])
+    assert record["status"] == "completed"
+    assert record["model_id"] == 8
+    assert seen["model_id"] == 8
+    assert seen["search_enabled"] is True
 
 
 async def test_target_adapter_is_resolved_and_recorded(client_factory):
@@ -362,7 +406,7 @@ async def test_target_adapter_is_resolved_and_recorded(client_factory):
 async def test_invalid_target_is_rejected(client_factory):
     _, client = await client_factory()
     bad_scheme = await client.post(
-        "/audits", json={"model_id": 2, "target": "sandbox:9"}
+        "/audits", json={"model_id": 2, "target": "sandbox:99"}
     )
     assert bad_scheme.status_code == 400
     outside = await client.post(

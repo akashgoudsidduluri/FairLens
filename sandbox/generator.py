@@ -271,7 +271,7 @@ def pincodes_for_group(group: str, urban_rural: str | None = None) -> list[str]:
 def make_twin(
     applicant: Applicant,
     attribute: str,
-    target_value: str | None = None,
+    target_value: str | int | None = None,
     rng: np.random.Generator | None = None,
 ) -> Applicant:
     """Change exactly one signal while holding everything else fixed.
@@ -281,9 +281,17 @@ def make_twin(
     - ``pincode_group``: chooses a pincode in the target group with the SAME
       urban/rural tag.
     - ``name_group``: chooses a name in the target group with the SAME gender.
+    - ``age``: moves the twin into ``target_value`` (an age band label or an
+      exact age) while holding income, loan amount, credit, employment, gender,
+      pincode, and name fixed. The twin must satisfy 21 <= age <= 65 and
+      ``employment_years <= age - 21``.
+    - ``urban_rural``: chooses a pincode in the SAME pincode group with the
+      target tag. P3 has no rural pincode, so that direction is infeasible and
+      raises. The pincode group never changes.
 
     Raises ``ValueError`` if no compatible value exists (e.g. a rural pincode
-    group that has no rural pincode).
+    group that has no rural pincode, or an age twin that cannot satisfy the
+    employment bound).
     """
 
     if rng is None:
@@ -326,11 +334,98 @@ def make_twin(
         data["name_group"] = target
         data["name"] = str(rng.choice(NAME_POOLS[(target, applicant.gender)]))
 
+    elif attribute == "age":
+        new_age = _age_target(applicant, target_value, rng)
+        if new_age == applicant.age:
+            raise ValueError("twin must change age")
+        data["age"] = int(new_age)
+        data["age_band"] = age_band_for(int(new_age))
+
+    elif attribute == "urban_rural":
+        target = target_value or (
+            "rural" if applicant.urban_rural == "urban" else "urban"
+        )
+        if target not in URBAN_RURAL_VALUES:
+            raise ValueError(f"invalid urban_rural target: {target}")
+        if target == applicant.urban_rural:
+            raise ValueError("twin must change urban_rural")
+        options = pincodes_for_group(applicant.pincode_group, target)
+        if not options:
+            raise ValueError(
+                f"no pincode in group {applicant.pincode_group} with "
+                f"urban_rural={target}"
+            )
+        pincode = str(rng.choice(options))
+        data["pincode"] = pincode
+        data["urban_rural"] = target
+
     else:
         raise ValueError(f"unsupported attribute: {attribute}")
 
     data["id"] = f"{applicant.id}-T"
     return Applicant(**data)
+
+
+_AGE_BAND_RANGES: dict[str, tuple[int, int]] = {
+    "<35": (21, 34),
+    "35-44": (35, 44),
+    "45+": (45, 65),
+}
+
+
+def _age_target(
+    applicant: Applicant,
+    target_value: str | int | None,
+    rng: np.random.Generator,
+) -> int:
+    """Pick a feasible twin age for an age-band or exact-age target.
+
+    Feasibility is 21 <= age <= 65 and ``employment_years <= age - 21``. When a
+    band is requested and the whole band is infeasible, that pair is dropped
+    with a clear reason rather than scored as if it were feasible.
+    """
+
+    minimum = 21
+    maximum = 65
+    if applicant.employment_years > maximum - 21:
+        raise ValueError(
+            "employment_years is incompatible with every age in 21..65"
+        )
+    minimum = max(minimum, int(np.ceil(applicant.employment_years + 21)))
+
+    if target_value is None:
+        low, high = _AGE_BAND_RANGES["45+"]
+    elif isinstance(target_value, str) and target_value in _AGE_BAND_RANGES:
+        low, high = _AGE_BAND_RANGES[target_value]
+    else:
+        try:
+            exact = int(target_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid age target: {target_value!r}") from exc
+        if exact < minimum or exact > maximum:
+            raise ValueError(
+                f"age {exact} is infeasible for employment_years="
+                f"{applicant.employment_years} in 21..65"
+            )
+        return exact
+
+    low = max(low, minimum)
+    high = min(high, maximum)
+    if low > high:
+        raise ValueError(
+            f"no feasible age in band {target_value!r} for "
+            f"employment_years={applicant.employment_years}"
+        )
+    return int(rng.integers(low, high + 1))
+
+
+def age_twin_feasible(applicant: Applicant, target_band: str) -> bool:
+    """Whether an age twin in ``target_band`` satisfies the feasibility rule."""
+
+    low, high = _AGE_BAND_RANGES.get(target_band, (0, -1))
+    low = max(low, int(np.ceil(applicant.employment_years + 21)), 21)
+    high = min(high, 65)
+    return low <= high
 
 
 def income_band(value: float, boundaries: Iterable[float]) -> int:

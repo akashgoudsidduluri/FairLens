@@ -1,5 +1,5 @@
 # Shared validation adapter for the synthetic sandbox bank.
-# The seven model-*.yaml files inherit this file and only change the model
+# The fifteen model-*.yaml files inherit this file and only change the model
 # query parameter. This maps the canonical Applicant to the sandbox's
 # POST /score_batch body and maps [{approved, score}] back to ModelResponse.
 name: sandbox

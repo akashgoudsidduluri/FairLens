@@ -25,12 +25,16 @@ class StreamEvent(ServiceModel):
 class AuditCreateRequest(ServiceModel):
     """Start an audit against a sandbox model or a YAML target adapter.
 
-    ``target`` accepts ``sandbox:N`` for the seven validation adapters or a
+    ``target`` accepts ``sandbox:N`` for the fifteen validation adapters or a
     repository-relative path to a YAML adapter. When omitted, the audit talks
     directly to ``api_url`` exactly as in v1.
+
+    ``search`` selects the generalized treatment x context protocol. Suite B
+    models (8-15) default to it; models 1-7 and connected targets keep the
+    frozen single/intersectional protocol unless it is explicitly requested.
     """
 
-    model_id: int = Field(ge=1, le=7, description="Report model label (1-7)")
+    model_id: int = Field(ge=1, le=15, description="Report model label (1-15)")
     api_url: str | None = Field(
         default=None, description="Sandbox base URL; defaults to config.yaml"
     )
@@ -39,6 +43,13 @@ class AuditCreateRequest(ServiceModel):
         description="Target adapter: 'sandbox:N' or a YAML path under the repo",
     )
     seed: int | None = Field(default=None, ge=0)
+    search: bool | None = Field(
+        default=None,
+        description=(
+            "Enable the generalized search. Defaults to on for suite B models "
+            "(8-15) and off elsewhere."
+        ),
+    )
     include_mitigation: bool = True
     include_narrative: bool = True
     sequential: bool | None = Field(
@@ -242,10 +253,44 @@ class RealEvidence(ServiceModel):
     sources: list[EvidenceSource]
 
 
+class SuiteBModelEvidence(ServiceModel):
+    model_id: int
+    runs: int
+    expectation_passed: int
+    expectation_total: int
+    kept_mean: float
+    kept_min: int
+    kept_max: int
+    candidates_mean: float
+    confirmed_mean: float
+    cells_examined: int
+    false_alarm_before: int | None = None
+    false_alarm_after: int | None = None
+    runtime_mean_s: float
+    mde_n200: float | None = None
+    mde_n1000: float | None = None
+    kept_ids: list[str]
+    misses: list[str]
+    notes: list[str]
+    dose_response: list[str]
+    max_dp_gap: float | None = None
+    max_dp_attribute: str = ""
+
+
+class SuiteBEvidence(ServiceModel):
+    models: list[SuiteBModelEvidence]
+    runs: int
+    expectation_passed: int
+    expectation_total: int
+    markdown: str
+    sources: list[EvidenceSource]
+
+
 class EvidenceReport(ServiceModel):
     generated_at: datetime
     sandbox: SandboxEvidence
     real: RealEvidence
+    suite_b: SuiteBEvidence
 
 
 class TargetAvailability(ServiceModel):

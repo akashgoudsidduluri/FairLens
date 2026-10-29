@@ -34,7 +34,9 @@ from api.schemas import (
 )
 
 ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-SANDBOX_TARGETS = [f"sandbox:{index}" for index in range(1, 8)]
+SANDBOX_TARGETS = [f"sandbox:{index}" for index in range(1, 16)]
+SUITE_A_MODELS = range(1, 8)
+SUITE_B_MODELS = range(8, 16)
 REAL_TARGETS = (
     ("uci_credit_default", "targets/real/uci-credit-default.yaml"),
     ("adult_income", "targets/real/adult-income.yaml"),
@@ -105,6 +107,57 @@ def _real_card(
     )
 
 
+def _sandbox_card(index: int, planned_pairs: int, probe_cap: int) -> TargetCard:
+    """One sandbox card. Models 1-7 are suite A, 8-15 suite B.
+
+    Model 15 is the clean control B: it has legitimate interactions but no
+    group term, so the generalized audit must keep nothing.
+    """
+
+    suite_b = index in SUITE_B_MODELS
+    description = (
+        "Synthetic black-box validation model. Its planted behaviour is known "
+        "to the frozen test suite, not to the auditor."
+    )
+    if suite_b and index == 15:
+        description = (
+            "Synthetic black-box control for validation suite B. It has "
+            "legitimate interactions and deterministic noise, but no group "
+            "term, so a correct audit keeps nothing."
+        )
+    elif suite_b:
+        description = (
+            "Synthetic black-box validation model for suite B. Its planted "
+            "treatment x context behaviour is known to the frozen test suite, "
+            "not to the auditor. Audited with the generalized search."
+        )
+    if index < 8:
+        metric = f"validation suite A · model {index}/7"
+    elif index == 15:
+        metric = "validation suite B · control B"
+    else:
+        metric = f"validation suite B · model {index - 7}/7"
+    label = f"Control model {index}" if index == 15 else f"Validation model {index}"
+    return TargetCard(
+        id=f"sandbox-{index}",
+        label=label,
+        kind="validation",
+        family="sandbox",
+        target=f"sandbox:{index}",
+        model_id=index,
+        description=description,
+        supported_probes=list(ALL_PROBES),
+        unsupported_probes={},
+        availability=TargetAvailability(
+            status="configured",
+            reason="served by the sandbox validation service on port 8010",
+        ),
+        planned_pairs=planned_pairs,
+        probe_cap=probe_cap,
+        metric=metric,
+    )
+
+
 def build_catalog(
     config: dict[str, Any], environ: Mapping[str, str] | None = None
 ) -> TargetCatalog:
@@ -113,30 +166,8 @@ def build_catalog(
     probe_cap = int((config.get("targets") or {}).get("probe_cap", 100000))
     cards: list[TargetCard] = []
 
-    for index, target in enumerate(SANDBOX_TARGETS, start=1):
-        cards.append(
-            TargetCard(
-                id=f"sandbox-{index}",
-                label=f"Validation model {index}",
-                kind="validation",
-                family="sandbox",
-                target=target,
-                model_id=index,
-                description=(
-                    "Synthetic black-box validation model. Its planted behaviour "
-                    "is known to the frozen test suite, not to the auditor."
-                ),
-                supported_probes=list(ALL_PROBES),
-                unsupported_probes={},
-                availability=TargetAvailability(
-                    status="configured",
-                    reason="served by the sandbox validation service on port 8010",
-                ),
-                planned_pairs=planned_pairs,
-                probe_cap=probe_cap,
-                metric=f"validation suite {index}/7",
-            )
-        )
+    for index, _ in enumerate(SANDBOX_TARGETS, start=1):
+        cards.append(_sandbox_card(index, planned_pairs, probe_cap))
 
     for offset, (model_name, relative_path) in enumerate(REAL_TARGETS):
         cards.append(

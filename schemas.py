@@ -19,8 +19,8 @@ PincodeGroup = Literal["P1", "P2", "P3"]
 NameGroup = Literal["N1", "N2", "N3"]
 UrbanRural = Literal["urban", "rural"]
 AgeBand = Literal["<35", "35-44", "45+"]
-FindingStatus = Literal["candidate", "kept", "rejected", "immaterial"]
-FindingKind = Literal["single_attribute", "intersectional"]
+FindingStatus = Literal["candidate", "kept", "rejected", "immaterial", "merged"]
+FindingKind = Literal["single_attribute", "intersectional", "generalized"]
 
 
 class Contract(BaseModel):
@@ -101,6 +101,13 @@ class Finding(Contract):
     status: FindingStatus
     reason: str = ""
     matched_evidence: Evidence | None = None
+    # Generalized search (R5). A finding separates the treatment (the flipped
+    # attribute and level) from the context (the subgroup where it appears).
+    treatment: str | None = None
+    treatment_level: str | None = None
+    context: dict[str, str] = Field(default_factory=dict)
+    search: dict[str, Any] = Field(default_factory=dict)
+    merged_into: str | None = None
 
 
 class Check(Contract):
@@ -133,7 +140,13 @@ class ProbeEvent(Contract):
     """
 
     probe_id: str
-    phase: Literal["single_attribute", "intersectional", "matched_retest"]
+    phase: Literal[
+        "single_attribute",
+        "intersectional",
+        "matched_retest",
+        "discovery",
+        "confirmation",
+    ]
     pair_index: int = Field(ge=0)
     changed_field: str
     original: dict[str, Any]

@@ -136,16 +136,21 @@ export interface FairlearnEvidence {
 
 export interface Finding {
   id: string;
-  kind: "single_attribute" | "intersectional";
+  kind: "single_attribute" | "intersectional" | "generalized";
   attribute_or_subgroup: string;
   target_group: string;
   comparison_group: string;
   evidence: Evidence;
   observational_gap: number;
   observational_rates?: Record<string, number>;
-  status: "candidate" | "kept" | "rejected" | "immaterial";
+  status: "candidate" | "kept" | "rejected" | "immaterial" | "merged";
   reason?: string;
   matched_evidence?: Evidence | null;
+  treatment?: string | null;
+  treatment_level?: string | null;
+  context?: Record<string, string>;
+  search?: Record<string, unknown>;
+  merged_into?: string | null;
 }
 
 export interface HTTPValidationError {
@@ -170,7 +175,7 @@ export interface ImpactEstimate {
 
 export interface ProbeEvent {
   probe_id: string;
-  phase: "single_attribute" | "intersectional" | "matched_retest";
+  phase: "single_attribute" | "intersectional" | "matched_retest" | "discovery" | "confirmation";
   pair_index: number;
   changed_field: string;
   original: Record<string, unknown>;

@@ -41,7 +41,11 @@ def review(
     ev = finding.evidence
     checks: list[Check] = []
 
-    required_n = min_cell if finding.kind == "intersectional" else min_pairs
+    required_n = (
+        min_cell
+        if finding.kind in {"intersectional", "generalized"}
+        else min_pairs
+    )
     min_ok = ev.n >= required_n
     checks.append(
         Check(
@@ -52,11 +56,16 @@ def review(
     )
 
     sig_ok = ev.p_adjusted < alpha
+    sig_detail = (
+        f"corrected p={ev.p_adjusted:.2e}; alpha={alpha}"
+        if finding.kind == "generalized"
+        else f"Holm-adjusted p={ev.p_adjusted:.2e}; alpha={alpha}"
+    )
     checks.append(
         Check(
             name="significance_after_correction",
             passed=sig_ok,
-            detail=f"Holm-adjusted p={ev.p_adjusted:.2e}; alpha={alpha}",
+            detail=sig_detail,
         )
     )
 
@@ -89,8 +98,11 @@ def review(
         matched_ok = False
         matched_detail = "not run: prerequisite checks failed or no re-test available"
     else:
+        matched_required = (
+            required_n if finding.kind == "generalized" else min_pairs
+        )
         matched_ok = bool(
-            matched_evidence.n >= min_pairs
+            matched_evidence.n >= matched_required
             and matched_evidence.p_raw < alpha
             and matched_evidence.net_flip_rate >= materiality
         )
@@ -101,10 +113,17 @@ def review(
                 f"; {positives}/{len(matched_bands)} income bands positive, "
                 f"bands={[(b['band'], round(b['net_flip_rate'], 3)) for b in matched_bands]}"
             )
-        matched_detail = (
-            f"n={matched_evidence.n}, net={matched_evidence.net_flip_rate:+.4f}, "
-            f"p={matched_evidence.p_raw:.2e}{band_text}"
-        )
+        if finding.kind == "generalized":
+            matched_detail = (
+                "confirmation twins hold every legitimate signal fixed "
+                f"(n={matched_evidence.n}, net={matched_evidence.net_flip_rate:+.4f}, "
+                f"p={matched_evidence.p_raw:.2e}){band_text}"
+            )
+        else:
+            matched_detail = (
+                f"n={matched_evidence.n}, net={matched_evidence.net_flip_rate:+.4f}, "
+                f"p={matched_evidence.p_raw:.2e}{band_text}"
+            )
     checks.append(
         Check(
             name="income_matched_persistence",
@@ -164,16 +183,34 @@ def review(
             "Rejected: no stable directional effect (b is not materially larger than c)."
         )
     elif not matched_ok:
-        status, reason = "rejected", (
-            "Rejected: the effect did not persist in the income-matched re-test."
-        )
+        if finding.kind == "generalized":
+            status, reason = "rejected", (
+                "Rejected: the fresh confirmation sample did not meet the "
+                "held-fixed sample/significance requirement."
+            )
+        else:
+            status, reason = "rejected", (
+                "Rejected: the effect did not persist in the income-matched re-test."
+            )
     else:
-        status, reason = "kept", (
-            f"Kept: {ev.n} pairs, net flip {ev.net_flip_rate:+.4f} "
-            f"(95% CI {ev.ci_low:+.4f} to {ev.ci_high:+.4f}), "
-            f"Holm-adjusted p={ev.p_adjusted:.2e}; effect persists in the "
-            "income-matched re-test."
-        )
+        if finding.kind == "generalized":
+            context = ", ".join(
+                f"{key}={value}" for key, value in finding.context.items()
+            ) or "main effect"
+            status, reason = "kept", (
+                f"Kept: treatment {finding.treatment}={finding.treatment_level} in "
+                f"context {context}; {ev.n} fresh confirmation pairs, net flip "
+                f"{ev.net_flip_rate:+.4f} (95% CI {ev.ci_low:+.4f} to "
+                f"{ev.ci_high:+.4f}), corrected p={ev.p_adjusted:.2e}; twins hold "
+                "every legitimate signal fixed."
+            )
+        else:
+            status, reason = "kept", (
+                f"Kept: {ev.n} pairs, net flip {ev.net_flip_rate:+.4f} "
+                f"(95% CI {ev.ci_low:+.4f} to {ev.ci_high:+.4f}), "
+                f"Holm-adjusted p={ev.p_adjusted:.2e}; effect persists in the "
+                "income-matched re-test."
+            )
 
     return SkepticVerdict(
         finding_id=finding.id,

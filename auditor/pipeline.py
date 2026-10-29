@@ -20,7 +20,7 @@ from auditor.interaction import (
     run_search,
 )
 from auditor.registry import load_registry
-from auditor.skeptic import review
+from auditor.skeptic import merge_redundant, review
 from auditor.statistician import (
     choose_target_group,
     holm_adjust,
@@ -467,6 +467,34 @@ def run_audit(
                 ),
             },
         )
+
+    # --- redundancy: one primary finding per overlapping confirmed cell -----
+    merges = merge_redundant(findings, config)
+    for merge in merges:
+        if merge["merged"] is None:
+            yield _event(
+                "skeptic",
+                f"Redundancy check: {merge['reason']}",
+                {
+                    "primary": merge["primary"],
+                    "checks": [merge["check"]],
+                },
+            )
+        else:
+            yield _event(
+                "skeptic",
+                f"MERGE {merge['merged']} -> {merge['primary']}: {merge['reason']}",
+                {
+                    "primary": merge["primary"],
+                    "merged": merge["merged"],
+                    "checks": [merge["check"]],
+                },
+            )
+    if search_summary is not None:
+        search_summary["merged"] = merges
+        search_summary["kept_after_merge"] = [
+            finding.id for finding in findings if finding.status == "kept"
+        ]
 
     kept = [f for f in findings if f.status == "kept"]
     impact = [impact_per_10k(f) for f in kept]

@@ -16,6 +16,39 @@ describe("TwinStream", () => {
     expect(screen.getByText(/only gender changed/)).toBeInTheDocument();
   });
 
+  it("highlights the age band when an age probe changes the band", () => {
+    render(
+      <TwinStream
+        events={[
+          makeProbe({
+            probe_id: "single-age-45plus",
+            changed_field: "age",
+            original: {
+              id: "orig-age",
+              income: 420000,
+              gender: "male",
+              age_band: "<35",
+              urban_rural: "urban",
+              pincode_group: "P1",
+              name_group: "N1",
+            },
+            twin: {
+              id: "twin-age",
+              income: 420000,
+              gender: "male",
+              age_band: "45+",
+              urban_rural: "urban",
+              pincode_group: "P1",
+              name_group: "N1",
+            },
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getAllByText("age band · changed")).toHaveLength(2);
+    expect(screen.getByText("changed: age")).toBeInTheDocument();
+  });
+
   it("fades matching pairs after a moment while flips stay readable", () => {
     vi.useFakeTimers();
     render(

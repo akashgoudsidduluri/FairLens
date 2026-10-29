@@ -19,6 +19,15 @@ const SUMMARY_FIELDS = [
   { key: "name_group", label: "name group" },
 ] as const;
 
+/**
+ * Probe ids name the attribute being varied, while the twin card shows the
+ * applicant column that actually changes. Age probes store `age` but the card
+ * renders `age_band`, so highlight the band when an age probe arrives.
+ */
+const CHANGED_FIELD_ALIAS: Record<string, string> = {
+  age: "age_band",
+};
+
 const PHASE_LABEL: Record<ProbeEvent["phase"], string> = {
   single_attribute: "single attribute",
   intersectional: "combined cells",
@@ -76,7 +85,8 @@ function ApplicantCard({
       </div>
       <dl className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1">
         {SUMMARY_FIELDS.map((field) => {
-          const changed = changedField === field.key;
+          const changed =
+            (CHANGED_FIELD_ALIAS[changedField] ?? changedField) === field.key;
           return (
             <div
               key={field.key}

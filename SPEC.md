@@ -82,14 +82,14 @@ the loss budget, breaking ties toward the smaller offset.
 `check_numbers(text, payload) -> dict` with `passed`, `unknown`, `checked`.
 
 ## `ui/app.py`
-Single Streamlit page with two tabs, **Audit** and **Certificates**.
+Single Streamlit page with two tabs, **Audit** and **Audit Records**.
 
 - Header: model picker, sandbox URL, **Start Audit**, **Demo mode** (Models
   2 → 7 → 5).
 - Audit tab: pipeline strip, live agent log, findings board, intersectional
   heatmap (table fallback), impact panel, mitigation slider in `@st.fragment`,
   number-checked narrative, approver name + Approve/Reject.
-- Certificates tab: chain view, **Verify chain**, labelled tamper demo behind an
+- Audit Records tab: chain view, **Verify chain**, labelled tamper demo behind an
   explicit confirmation, reset-demo-database.
 - The completed `AuditReport` and all notices live in `st.session_state` so a
   rerun (slider, button, tab switch) does not lose the report.
@@ -97,7 +97,7 @@ Single Streamlit page with two tabs, **Audit** and **Certificates**.
   the return value of the button call itself.
 - Empty, loading, and error states are explicit; an unreachable sandbox shows an
   error card, not a traceback.
-- No audit and no certificate are distinct states: the certificate tab shows
+- No audit and no Audit Record are distinct states: the Audit Records tab shows
   `NOT CHECKED / 0 records`, never a vacuous `CHAIN VERIFIED`.
 
 ## `ui/components.py`

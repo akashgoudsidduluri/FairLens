@@ -117,7 +117,7 @@ Artifact: mitigation chart (one shared percentage-point axis) and slider.
 
 ## Slide 8 — Human gate and tamper evidence (45 s)
 
-- No certificate without a non-empty approver name.
+- No Audit Record without a non-empty approver name.
 - `record_hash = sha256(prev_hash + canonical_json(payload))`, 64-zero genesis.
 - Verification recomputes every row and reports the **first broken record**.
 - The demo deliberately edits a row: the chain goes red.
@@ -125,7 +125,7 @@ Artifact: mitigation chart (one shared percentage-point axis) and slider.
 > Tamper-evident, not authorship-proof. Anyone who can rewrite every row can
 > recompute the chain; signing is future work. The UI says so.
 
-Artifact: Certificates tab, `CHAIN VERIFIED`, then `CHAIN BROKEN` / `HASH
+Artifact: Audit Records tab, `CHAIN VERIFIED`, then `CHAIN BROKEN` / `HASH
 MISMATCH`.
 
 ---
@@ -151,13 +151,13 @@ Artifact: `eval/results/summary.md` and the Model 5 card.
 - Synthetic data; not evidence about a real lender or real Indian populations.
 - Twins are approximations; a null result is not proof of fairness.
 - The Skeptic is rule-based, not omniscient.
-- The certificate is tamper-evident, not signed.
+- The Audit Record is tamper-evident, not signed.
 
 > FairLens is not a fairness score. It is an audit trail: twin evidence, a
 > Skeptic that tries to falsify it, human impact, a human decision, and a
 > tamper-evident record.
 
-Artifact: the full report and certificate chain.
+Artifact: the full report and Audit Record chain.
 
 ---
 

@@ -447,7 +447,7 @@ def chain_view(certificates: Sequence[Any], broken_index: int | None) -> str:
     records = list(certificates or [])
     if not records:
         return empty_state(
-            "No certificates yet",
+            "No audit records yet",
             "Approve or reject an audit to issue the first record in the chain.",
             icon="⛓",
         )
@@ -486,7 +486,7 @@ def chain_view(certificates: Sequence[Any], broken_index: int | None) -> str:
             else ""
         )
         blocks.append(
-            f'<article class="{classes}" aria-label="Certificate {index}">'
+            f'<article class="{classes}" aria-label="Audit Record {index}">'
             '<div class="fl-chain__row">'
             f'<span class="fl-chain__index">#{index}</span>'
             f'<span class="fl-badge fl-badge--{decision_tone}">{_escape(decision.upper())}</span>'

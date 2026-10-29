@@ -1,7 +1,7 @@
 # FairLens India — five-minute demo script
 
 Audience: hackathon judges. Goal: show that the auditor is genuinely black-box,
-that it challenges itself, that a human is required, and that the certificate
+that it challenges itself, that a human is required, and that the Audit Record
 tamper check is real.
 
 ## Before the room (2 minutes)
@@ -12,7 +12,7 @@ tamper check is real.
 
 Wait for `FairLens dashboard: http://127.0.0.1:8501`, then open it. Check the
 sandbox health badge by running an audit once if you have time. Reset the
-certificate database from the **Certificates** tab so the chain starts clean.
+Audit Record database from the **Audit Records** tab so the chain starts clean.
 Close other browser tabs. Set the browser zoom to 100%.
 
 If the laptop is slow, use **Demo mode** instead of three separate audits: it
@@ -58,18 +58,20 @@ before the first audit.
 
 ## 2:00 — The human gate (45 s)
 
-1. Press **Approve & issue certificate** without a name. It refuses. Say:
+1. Press **Approve & issue Audit Record** without a name. It refuses. Say:
 
-> No certificate without a named human. The auditor does not sign for you.
+> No Audit Record without a named human. The auditor does not sign for you.
 
-2. Type `Dr A. Rao`, press **Approve & issue certificate**.
-3. Open the **Certificates** tab. Show the chain: genesis, record #0, approver,
+2. Type `Dr A. Rao`, press **Approve & issue Audit Record**.
+3. Open the **Audit Records** tab. Show the chain: genesis, record #0, approver,
    decision, UTC timestamp, `record_hash`, `prev_hash`. Press **Verify chain**.
 4. Tick the confirmation and press **Demo: tamper with the newest record**, then
    **Verify chain**. Show `CHAIN BROKEN`, the red record, and `HASH MISMATCH`.
 
 > This proves tamper-evidence, not authorship. Anyone who can rewrite every row
-> can recompute the chain. Signing is future work — and the UI says so.
+> can recompute the chain. Signing is future work — and the UI says so. An Audit
+> Record documents what was measured; it is not a certification of fairness,
+> lawfulness, or compliance.
 
 ## 2:45 — Model 7: a gap is not a finding (45 s)
 
@@ -101,7 +103,7 @@ before the first audit.
 ## 4:15 — Evidence and close (45 s)
 
 1. Show `eval/results/summary.md`: 7 models × 5 seeds, 1% / 3% sensitivity,
-   false alarms before/after the Skeptic, every miss, certificate test, number
+   false alarms before/after the Skeptic, every miss, Audit Record test, number
    check pass rate.
 2. Show the Fairlearn comparison: Model 7 has a gender DP gap of 0.1501 and is
    still not flagged, because the gap is confounded; Model 2's DP gap is 0.6605
@@ -120,7 +122,7 @@ before the first audit.
   .\run.ps1`.
 - **Audit is slow**: use **Demo mode**; the recorded headless runs took 67.9s
   and 75.6s for all three models, and each audit is under the 60s budget.
-- **Certificate tab is red before the demo**: press **Reset demo certificate
+- **Audit Records tab is red before the demo**: press **Reset demo Audit Record
   database**. The database is local and disposable.
 - **No Anthropic key**: the template narrative is expected and passes the number
   check. Do not apologise for it; it is the deterministic fallback.
@@ -129,6 +131,6 @@ before the first audit.
 
 - "The model is biased" — say "the model's decisions show disparate treatment
   under this test."
-- "The certificate proves who approved it" — say "tamper-evident, not
+- "The Audit Record proves who approved it" — say "tamper-evident, not
   authorship."
 - "FairLens proves fairness" — say "a null result is not proof of fairness."

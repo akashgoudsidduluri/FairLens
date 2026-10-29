@@ -11,8 +11,9 @@ or reject a tamper-evident record. Every number in the narrative is checked
 against the computed JSON. The LLM writes prose; it never calculates.
 
 > Synthetic sandbox only. Findings are evidence of disparate treatment, not
-> proof of intent, and the certificate chain proves tamper-evidence, not
-> authorship.
+> proof of intent. An Audit Record documents what one audit measured and who
+> signed off; it is not a certification of fairness, lawfulness, or compliance,
+> and the hash chain proves tamper-evidence, not authorship.
 
 ## Demo in three minutes
 
@@ -20,8 +21,8 @@ against the computed JSON. The LLM writes prose; it never calculates.
 2. Keep **Model 2** and press **Start Audit**. The pipeline, live log, kept and
    rejected findings, intersectional heatmap, impact counter, mitigation slider,
    and number-checked narrative fill in.
-3. Enter an approver name and press **Approve & issue certificate**.
-4. Open the **Certificates** tab. Press **Verify chain**. Tick the confirmation
+3. Enter an approver name and press **Approve & issue Audit Record**.
+4. Open the **Audit Records** tab. Press **Verify chain**. Tick the confirmation
    and press **Demo: tamper with the newest record**, then **Verify chain** again:
    the first broken record is highlighted in red.
 5. Switch back to **Audit**, choose **Model 7**, and run it: observational gaps
@@ -31,13 +32,13 @@ against the computed JSON. The LLM writes prose; it never calculates.
    the seed-42 audit, a known pre-registration miss), while the intersectional
    hotspot is large. The **Demo mode** button runs Models 2 → 7 → 5 in one go.
 
-To clear the certificate chain between demos without touching recorded audits:
+To clear the Audit Record chain between demos without touching recorded audits:
 
 ```powershell
 .\.venv\Scripts\python -m trust.reset_demo_data
 ```
 
-Pass `--db path\to\store.db` to reset a different certificate store.
+Pass `--db path\to\store.db` to reset a different Audit Record store.
 
 ## Setup
 
@@ -88,7 +89,7 @@ It never reveals which model has a planted penalty. The auditor imports only
 
 The v2 service runs audits as background jobs over HTTP, streams live progress
 as Server-Sent Events, persists every audit and event in SQLite behind a
-swappable store interface, and gates certificate issuance behind a named human
+swappable store interface, and gates Audit Record issuance behind a named human
 decision.
 
 ```powershell
@@ -110,7 +111,7 @@ $audit = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8020/audits `
 # stream agent + per-pair probe events (SSE)
 curl.exe -N "http://127.0.0.1:8020/audits/$($audit.id)/events"
 
-# fetch the report, then sign off and issue a certificate
+# fetch the report, then sign off and issue an Audit Record
 Invoke-RestMethod "http://127.0.0.1:8020/audits/$($audit.id)"
 $decision = '{"approver": "Asha Auditor", "decision": "approve"}'
 Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8020/audits/$($audit.id)/decision" `
@@ -285,7 +286,7 @@ finding. This is fixed in `expected_findings.md` before the run.
 
 The suite covers the frozen contracts, generator and seven models, twin
 construction, exact McNemar/bootstrap/Holm statistics, Skeptic rules, mitigation,
-impact arithmetic, certificate chain and tamper detection, number checking, the
+impact arithmetic, Audit Record chain and tamper detection, number checking, the
 reporter fallback, Streamlit flows (audit, approve/reject, demo, tamper),
 black-box import boundaries, launchers, the shared Plotly theme, and the v2
 audit API, SSE stream, generated types, target adapters, and sequential stopping.
@@ -361,7 +362,7 @@ the Model 5 miss, are in [DECISIONS.md](DECISIONS.md).
 | `auditor/` | Prober, paired statistics, Skeptic, pipeline |
 | `impact/` | Per-10,000 impact and mitigation curves |
 | `report/` | Number checker, LLM reporter, template fallback |
-| `trust/` | Certificate payload, SQLite hash chain, verification, tamper demo |
+| `trust/` | Audit Record payload, SQLite hash chain, verification, tamper demo |
 | `ui/` | Streamlit app, pure HTML components, Plotly theme, CSS |
 | `api/` | v2 FastAPI audit service, SQLite store, SSE stream, TS type generation |
 | `targets/` | v2 YAML target adapters, sandbox validation adapters, probe caps |

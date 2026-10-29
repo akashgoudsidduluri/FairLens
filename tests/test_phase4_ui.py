@@ -116,7 +116,7 @@ def _report(config: dict) -> AuditReport:
             "FairLens audited model 2 through its API. The Skeptic kept 1 of 2 "
             "candidate findings. This is evidence of disparate treatment in a "
             "synthetic sandbox, not proof of intent. A named human auditor must "
-            "approve before any certificate is issued."
+            "approve before any Audit Record is issued."
         ),
         number_check_result={
             "passed": True,
@@ -163,7 +163,7 @@ def test_ui_renders_initial_state(app_test):
     at, db_path = app_test
     assert at.tabs
     assert any("No audit yet" in markdown.value for markdown in at.markdown)
-    assert any("No certificates yet" in markdown.value for markdown in at.markdown)
+    assert any("No audit records yet" in markdown.value for markdown in at.markdown)
     assert any("NOT CHECKED" in markdown.value for markdown in at.markdown)
     assert verify(db_path) == (True, None)
 
@@ -182,18 +182,18 @@ def test_ui_full_audit_and_human_approval_flow(app_test):
     assert "NUMBER CHECK PASSED" in " ".join(markdown.value for markdown in at.markdown)
     assert any("audited model 2" in block.value for block in at.markdown)
 
-    # A certificate cannot be issued without a named human.
-    _click(at, "Approve & issue certificate")
+    # An Audit Record cannot be issued without a named human.
+    _click(at, "Approve & issue Audit Record")
     at.run()
     assert any("Enter the approver" in error.value for error in at.error)
     assert list_records(db_path) == []
 
     next(t for t in at.text_input if t.label == "Approver name").set_value("Dr Test Auditor")
-    _click(at, "Approve & issue certificate")
+    _click(at, "Approve & issue Audit Record")
     at.run()
 
     assert not at.exception, [exc.value for exc in at.exception]
-    assert any("Certificate #0 issued for Model 2" in msg.value for msg in at.success)
+    assert any("Audit Record #0 issued for Model 2" in msg.value for msg in at.success)
     records = list_records(db_path)
     assert len(records) == 1
     assert records[0].payload["decision"] == "approve"
@@ -257,7 +257,7 @@ def test_ui_reject_logs_decision_without_approval(app_test):
     at.run()
 
     assert not at.exception, [exc.value for exc in at.exception]
-    assert any("Rejection logged as certificate #0" in msg.value for msg in at.warning)
+    assert any("Rejection logged as Audit Record #0" in msg.value for msg in at.warning)
     records = list_records(db_path)
     assert len(records) == 1
     assert records[0].payload["decision"] == "reject"

@@ -115,7 +115,7 @@ def build_payload(report: AuditReport, events: list[Any] | None = None) -> dict[
             "Synthetic sandbox data; not real Indian lending data.",
             "Twin probing is evidence of disparate treatment, not proof of intent.",
             "Fairness metrics can conflict; no single metric is definitive.",
-            "A named human auditor must review before a certificate is issued.",
+            "A named human auditor must review before an Audit Record is issued.",
         ],
     }
     if events is not None:
@@ -169,7 +169,7 @@ def template_narrative(payload: dict[str, Any], max_words: int = 250) -> str:
         "treatment in a synthetic sandbox, not proof of intent or a claim about a real "
         "lender. Synthetic twins are approximations, fairness metrics can conflict, and "
         "results may not generalize. A named human auditor must approve before any "
-        "certificate is issued."
+        "Audit Record is issued."
     )
     text = " ".join(parts)
     if _word_count(text) > max_words:

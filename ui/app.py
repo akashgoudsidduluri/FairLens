@@ -6,7 +6,7 @@ Run from the repository root::
 
 The page streams agent events while an audit runs, shows kept and rejected
 findings, an intersectional heatmap, human impact, a mitigation trade-off
-slider, the number-checked narrative, and the human sign-off + certificate
+slider, the number-checked narrative, and the human sign-off + Audit Record
 verification flow.
 """
 
@@ -238,7 +238,7 @@ def _certificate_card(cert: Any) -> str:
     decision = str(payload.get("decision", "—")).upper()
     return (
         '<div class="fl-cert-card">'
-        f"<h4>Certificate #{cert.index} · Model {html.escape(str(payload.get('model_id', '—')))}</h4>"
+        f"<h4>Audit Record #{cert.index} · Model {html.escape(str(payload.get('model_id', '—')))}</h4>"
         f"<p><b>{html.escape(decision)}</b> by {html.escape(str(payload.get('approver', '—')))}</p>"
         f"<p>{html.escape(str(payload.get('timestamp', '—')))}</p>"
         f'<p class="fl-hash">record_hash: {html.escape(cert.record_hash)}</p>'
@@ -299,14 +299,18 @@ def _approve() -> None:
         payload = build_certificate_payload(report, report.config, name, "approve")
         certificate = issue(payload, name, "approve", DB_PATH)
     except Exception as exc:  # noqa: BLE001
-        _set_notice("signoff_notice", "error", f"Certificate could not be issued: {exc}")
+        _set_notice(
+            "signoff_notice",
+            "error",
+            f"Audit Record could not be issued: {exc}",
+        )
         return
     st.session_state.last_cert = certificate
     st.session_state.verify_state = None
     _set_notice(
         "signoff_notice",
         "success",
-        f"Certificate #{certificate.index} issued for Model {report.model_id} by {name}.",
+        f"Audit Record #{certificate.index} issued for Model {report.model_id} by {name}.",
     )
 
 
@@ -334,8 +338,8 @@ def _reject() -> None:
     _set_notice(
         "signoff_notice",
         "warning",
-        f"Rejection logged as certificate #{certificate.index}. "
-        "No approval certificate was issued.",
+        f"Rejection logged as Audit Record #{certificate.index}. "
+        "No approval record was issued.",
     )
 
 
@@ -345,7 +349,7 @@ def _verify_chain() -> None:
         _set_notice(
             "cert_notice",
             "warning",
-            "There are no certificates to verify yet.",
+            "There are no audit records to verify yet.",
         )
         return
     ok, broken = verify(DB_PATH)
@@ -370,7 +374,7 @@ def _tamper() -> None:
         return
     records = list_records(DB_PATH)
     if not records:
-        _set_notice("cert_notice", "warning", "There is no certificate to tamper with.")
+        _set_notice("cert_notice", "warning", "There is no audit record to tamper with.")
         return
     result = tamper_for_demo(records[-1].index, DB_PATH)
     ok, broken = verify(DB_PATH)
@@ -390,7 +394,7 @@ def _reset_demo_db() -> None:
     _set_notice(
         "cert_notice",
         "success",
-        "Certificate database reset for a fresh demo.",
+        "Audit Record database reset for a fresh demo.",
     )
 
 
@@ -548,7 +552,7 @@ st.markdown(
           <p class="fl-hero__sub">
             An agentic auditor that probes a lending model with counterfactual twins,
             challenges its own findings, translates them into human impact, and asks a
-            named human to sign a tamper-evident certificate.
+            named human to sign a tamper-evident Audit Record.
           </p>
           <div class="fl-chips">
             <span class="fl-chip">HTTP twin probes</span>
@@ -626,7 +630,7 @@ if start_clicked or demo_clicked:
     st.session_state.demo_summary = []
     st.session_state.demo_events = {}
 
-audit_tab, certificate_tab = st.tabs(["Audit", "Certificates"])
+audit_tab, certificate_tab = st.tabs(["Audit", "Audit Records"])
 
 with audit_tab:
     st.markdown(_section_head("Agent pipeline", "live execution"), unsafe_allow_html=True)
@@ -1010,11 +1014,11 @@ with audit_tab:
             st.warning(f"Unknown numbers: {check['unknown']}")
 
         st.markdown(
-            _section_head("Human sign-off", "no certificate without a name"),
+            _section_head("Human sign-off", "no audit record without a name"),
             unsafe_allow_html=True,
         )
         st.markdown(
-            '<p class="fl-caption">No certificate is issued without an explicit '
+            '<p class="fl-caption">No Audit Record is issued without an explicit '
             "Approve or Reject action and a named approver. A hash chain proves "
             "tamper-evidence, not authorship; signing is future work.</p>",
             unsafe_allow_html=True,
@@ -1028,7 +1032,7 @@ with audit_tab:
         approve_col, reject_col = st.columns(2)
         with approve_col:
             st.button(
-                "Approve & issue certificate",
+                "Approve & issue Audit Record",
                 type="primary",
                 width="stretch",
                 on_click=_approve,
@@ -1047,7 +1051,7 @@ with audit_tab:
 
 with certificate_tab:
     st.markdown(
-        _section_head("Certificate chain", "tamper-evident · not authorship"),
+        _section_head("Audit Record chain", "tamper-evident · not authorship"),
         unsafe_allow_html=True,
     )
     _render_notice(st.session_state.cert_notice)
@@ -1088,7 +1092,7 @@ with certificate_tab:
         )
     with tamper_col:
         confirm = st.checkbox(
-            "I understand this demo button modifies the local certificate database",
+            "I understand this demo button modifies the local Audit Record database",
             key="confirm_tamper",
         )
         st.button(
@@ -1098,9 +1102,9 @@ with certificate_tab:
             on_click=_tamper,
         )
     with reset_col:
-        st.markdown('<div class="fl-sr-only">Reset the demo certificate database</div>', unsafe_allow_html=True)
+        st.markdown('<div class="fl-sr-only">Reset the demo Audit Record database</div>', unsafe_allow_html=True)
         st.button(
-            "Reset demo certificate database",
+            "Reset demo Audit Record database",
             width="stretch",
             on_click=_reset_demo_db,
         )
@@ -1117,8 +1121,16 @@ with certificate_tab:
         )
 
     if st.session_state.last_cert is not None:
-        with st.expander("Last certificate payload", expanded=False):
+        with st.expander("Last Audit Record payload", expanded=False):
             st.json(st.session_state.last_cert.payload)
+
+    st.markdown(
+        '<p class="fl-caption">An Audit Record documents what one audit measured '
+        "and who signed off on it. It is not a certification that the model is "
+        "fair, lawful, or compliant. The hash chain proves tamper-evidence, not "
+        "authorship.</p>",
+        unsafe_allow_html=True,
+    )
 
     st.markdown(
         '<p class="fl-caption">record_hash = sha256(prev_hash + canonical_json(payload)). '
@@ -1132,6 +1144,8 @@ with certificate_tab:
 st.markdown(
     '<div class="fl-footer"><b>Synthetic sandbox only.</b> '
     "Evidence of disparate treatment, not proof of intent. "
-    "The certificate chain proves tamper-evidence, not authorship.</div>",
+    "Audit Records document measurements; they are not a certification of "
+    "fairness, lawfulness, or compliance. The hash chain proves "
+    "tamper-evidence, not authorship.</div>",
     unsafe_allow_html=True,
 )

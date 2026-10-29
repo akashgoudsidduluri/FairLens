@@ -75,7 +75,7 @@ biased model.
 | `auditor/` | Prober, paired statistics, rule-based Skeptic, pipeline |
 | `impact/` | Per-10,000 impact, mitigation curves, recommendations |
 | `report/` | Computed payload, LLM prose, number checker, template fallback |
-| `trust/` | Certificate payload, SQLite hash chain, verification, tamper demo |
+| `trust/` | Audit Record payload, SQLite hash chain, verification, tamper demo |
 | `ui/` | Streamlit dashboard, HTML components, Plotly theme, CSS |
 | `eval/` | Full evaluation, Fairlearn baseline, charts, demo smoke test |
 
@@ -227,12 +227,12 @@ passes the same check.
 The guarantee is narrow and honest: a passing number check proves the prose
 matches the computed JSON. It does not prove the prose is wise.
 
-### Certificate
+### Audit Record
 
 `record_hash = sha256(prev_hash + canonical_json(payload))`, with a 64-zero
 genesis hash. Verification recomputes the whole chain, checks index order,
 `prev_hash` links, payload hashes, and the duplicated timestamp column, and
-reports the **first broken record**. No certificate can be issued without a
+reports the **first broken record**. No Audit Record can be issued without a
 non-empty approver name and an explicit approve/reject action.
 
 The chain is **tamper-evident, not authorship-proof**. An attacker who can
@@ -258,7 +258,7 @@ The evaluation is a separate harness, not the demo:
   copies of the config. No file is edited.
 - **Mitigation:** one seed-42 audit per model, then the full offset sweep for the
   largest kept finding, at a default 2% accuracy-loss budget.
-- **Certificate:** issue, verify, tamper, verify again, in a temporary database.
+- **Audit Record:** issue, verify, tamper, verify again, in a temporary database.
 - **Fairlearn baseline:** 4,000 synthetic applicants scored by all seven models
   over HTTP; demographic parity and equalized odds differences computed against
   the generator's hidden repayment label.
@@ -405,7 +405,7 @@ of the same code measured 67.9 s; both runs keep every audit under 60 s.
 The report does not hide the outliers: they are in `results.csv` with
 `runtime_under_60 = False`. They are not used to claim a latency win.
 
-### 7.8 Certificate test
+### 7.8 Audit Record test
 
 | Check | Result |
 |---|---|
@@ -413,7 +413,7 @@ The report does not hide the outliers: they are in `results.csv` with
 | Chain valid before tamper | True |
 | Chain valid after tamper | False |
 | First broken record | 0 |
-| Certificate hash (eval harness run) | `f8204ddb5609c8644bf83cfa149eec2b243507522b339346a1505f59af699345` |
+| Audit Record hash (eval harness run) | `f8204ddb5609c8644bf83cfa149eec2b243507522b339346a1505f59af699345` |
 
 The tamper demo edits a real row, then verification recomputes every hash and
 link and reports the first failure. The hash changes on every run because the
@@ -452,7 +452,7 @@ to call the first one a finding on its own.
 
 The dashboard was driven with headless Chrome at 1366×768 and 1920×1080. Both
 sizes have no horizontal page overflow (`scrollWidth == viewport width`). The
-full report, the empty certificate state, a verified chain, and a tampered chain
+full report, the empty Audit Record state, a verified chain, and a tampered chain
 were captured. The Streamlit test harness also exercises the audit, approve,
 reject, demo, and tamper flows.
 
@@ -473,9 +473,9 @@ The dashboard is a single Streamlit page with two tabs.
 - impact counter that counts up to the per-10,000 estimate;
 - mitigation slider in an `st.fragment`, so moving it reruns only that section;
 - number-checked narrative with a `NUMBER CHECK PASSED` badge;
-- sign-off: approver name plus Approve/Reject. No name, no certificate.
+- sign-off: approver name plus Approve/Reject. No name, no Audit Record.
 
-**Certificates tab**
+**Audit Records tab**
 
 - chain view with genesis, record hash, previous hash, approver, decision, and
   UTC timestamp;
@@ -496,7 +496,7 @@ The dashboard is a single Streamlit page with two tabs.
   percentage-point axis; a second axis would make them look comparable when
   they are not.
 - Empty, loading, and error states are explicit. An unreachable sandbox shows an
-  error card; no audit shows a clear empty state; zero certificates shows
+  error card; no audit shows a clear empty state; zero audit records shows
   `NOT CHECKED / 0 records`, not a vacuous verification.
 - Layout was checked at 1366×768 and 1920×1080 with headless Chrome. In both
   cases `document.documentElement.scrollWidth` equals the viewport width. The
@@ -504,7 +504,7 @@ The dashboard is a single Streamlit page with two tabs.
   `x = −10000`.
 
 Screenshots: `eval/results/ui_1366x768.png`, `ui_1920x1080.png`, and the three
-certificate states.
+Audit Record states.
 
 The demo path is **Model 2 → Model 7 → Model 5**. **Demo mode** runs all three
 and leaves the last report open. The latest serial headless run took **75.6 s**
@@ -558,9 +558,9 @@ cosmetic changes:
   non-default port started a sandbox the dashboard could not reach. The
   launchers now export `FAIRLENS_API_URL`, the UI reads it, and a regression
   test checks it.
-- **Certificates hashed the wrong config.** Sign-off hashed the global config at
+- **Audit Records hashed the wrong config.** Sign-off hashed the global config at
   signing time. It now hashes `report.config`, the config the audit actually
-  ran with, so a sensitivity audit cannot produce a certificate whose
+  ran with, so a sensitivity audit cannot produce an Audit Record whose
   thresholds disagree with its findings.
 - **Demo inspection showed the wrong log.** "Open demo result" changed the
   report but left the live log and pipeline strip on the last model (5). The
@@ -585,8 +585,8 @@ cosmetic changes:
   are recorded in `DECISIONS.md` D-016, `SPEC.md`, and `config.yaml`.
 
 The regression suite is now **84 passing tests** (up from 80), and the latest
-headless demo completed all three audits plus the certificate/tamper/unreachable
-checks in **75.6 s**. The certificate chain still cannot detect deletion of
+headless demo completed all three audits plus the Audit Record/tamper/unreachable
+checks in **75.6 s**. The Audit Record chain still cannot detect deletion of
 trailing rows without an external head hash; that is a documented design limit,
 not a fixed defect.
 
@@ -614,14 +614,14 @@ not a fixed defect.
   usually unavailable, so the curve is an offline what-if.
 - **The number check is syntactic.** It proves the prose matches the JSON, not
   that the JSON is the right analysis.
-- **The certificate is tamper-evident, not signed.** Anyone with write access
+- **The Audit Record is tamper-evident, not signed.** Anyone with write access
   can recompute the chain. It also cannot detect deletion of trailing records
   without an external head hash or append-only log. Digital signatures and such
   an anchor are future work.
 - **Synthetic data.** Pincodes, names, and income distributions are invented.
   No claim is made about real Indian populations or a real lender.
 - **No authentication or multi-user store.** The dashboard is a local demo; the
-  certificate database is a local SQLite file.
+  Audit Record database is a local SQLite file.
 
 ---
 
@@ -651,9 +651,9 @@ Artifacts:
 | `eval/results/results.csv` | Every main audit: model, seed, kept/rejected, expectation, runtime, number check, error |
 | `eval/results/materiality_sensitivity.csv` | 1% and 3% audits |
 | `eval/results/mitigation_curves.csv` | Full offset sweeps at seed 42 |
-| `eval/results/summary.md` | Aggregated table, false alarms, misses, sensitivity, certificate test |
+| `eval/results/summary.md` | Aggregated table, false alarms, misses, sensitivity, Audit Record test |
 | `eval/results/fairlearn.md` / `.csv` | Observational baseline |
-| `eval/results/phase5_demo_smoke.md` | Serial three-model demo and certificate flow |
+| `eval/results/phase5_demo_smoke.md` | Serial three-model demo and Audit Record flow |
 | `eval/results/*.png` | Evaluation charts and dashboard screenshots |
 
 The demo is deterministic at seed 42. Evaluation seeds 1–5 are reserved; the
@@ -664,7 +664,7 @@ consume an evaluation seed.
 
 ## 11. Future work
 
-1. **Digital signatures.** Sign each certificate with an Ed25519 key held by the
+1. **Digital signatures.** Sign each Audit Record with an Ed25519 key held by the
    approver, and anchor the chain head outside the database. That turns
    tamper-evidence into authorship evidence.
 2. **Adaptive probing.** Spend more pairs where the CI is wide, instead of fixed

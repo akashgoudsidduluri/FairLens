@@ -69,6 +69,8 @@ export function Landing() {
 
   const catalog = state.status === "ready" ? state.catalog.targets : [];
   const validation = catalog.filter((card) => card.kind === "validation");
+  const suiteA = validation.filter((card) => (card.model_id ?? 0) <= 7);
+  const suiteB = validation.filter((card) => (card.model_id ?? 0) >= 8);
   const real = catalog.filter((card) => card.kind === "real");
   const llm = catalog.filter((card) => card.kind === "llm");
 
@@ -97,8 +99,8 @@ export function Landing() {
           </h1>
           <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-muted">
             FairLens sends twin applicants through a lender model — identical
-            except for gender, name, or region — and shows every decision live.
-            A flip is a decision that changed for the same person.
+            except for gender, age band, name, or region — and shows every
+            decision live. A flip is a decision that changed for the same person.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -119,7 +121,7 @@ export function Landing() {
           </div>
 
           <dl className="mt-10 grid max-w-xl grid-cols-3 gap-4 border-t border-line/60 pt-6">
-            <HeroStat value="7" label="validation models" />
+            <HeroStat value="15" label="validation models" />
             <HeroStat value="2" label="real datasets" />
             <HeroStat value="1" label="LLM screener" />
           </dl>
@@ -202,11 +204,11 @@ export function Landing() {
             <SectionHeading
               icon={<FlaskConical className="h-4 w-4" aria-hidden="true" />}
               title="Validation suite"
-              tag="7 synthetic models"
-              description="Known planted behaviour, frozen thresholds. Use these to see the arena work end to end."
+              tag="7 suite A · 8 suite B"
+              description="Known planted behaviour, frozen thresholds. Suite A runs the original single-attribute and intersectional probes; suite B adds the treatment × context search and ends with a clean control (Model 15)."
             />
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {validation.map((card) => (
+              {suiteA.map((card) => (
                 <ModelCard
                   key={card.id}
                   card={card}
@@ -215,6 +217,29 @@ export function Landing() {
                 />
               ))}
             </div>
+
+            {suiteB.length > 0 && (
+              <>
+                <div className="mt-10 flex flex-wrap items-center gap-2 border-t border-line/60 pt-6">
+                  <Badge variant="accent">validation suite B</Badge>
+                  <p className="text-[12px] text-muted">
+                    A different attribute is flipped inside a context. These audits
+                    run the generalized search by default; Model 15 is the clean
+                    control and should keep nothing.
+                  </p>
+                </div>
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {suiteB.map((card) => (
+                    <ModelCard
+                      key={card.id}
+                      card={card}
+                      starting={startingId === card.id}
+                      onStart={start}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
 
             <SectionHeading
               className="pt-14"

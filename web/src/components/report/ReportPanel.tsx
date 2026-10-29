@@ -7,6 +7,7 @@ import {
   Clapperboard,
   FileCheck2,
   Gauge,
+  GitMerge,
   Hash,
   Loader2,
   RotateCcw,
@@ -25,6 +26,7 @@ import type {
   ImpactEstimate,
 } from "@/api-types";
 import { CertificateCard } from "@/components/report/CertificateCard";
+import { SearchPanel } from "@/components/report/SearchPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,10 +42,12 @@ import {
   narrativeSource,
   orderedFindings,
   reportCounts,
+  searchSummary,
   skepticReviews,
   type HeatmapCell,
   type SkepticReview,
 } from "@/lib/report";
+import { probeLabel } from "@/lib/stream";
 import { cn } from "@/lib/utils";
 
 const STATUS_META = {
@@ -73,6 +77,13 @@ const STATUS_META = {
     badge: "outline" as const,
     icon: Gauge,
     border: "border-line",
+    text: "text-muted",
+  },
+  merged: {
+    label: "MERGED",
+    badge: "outline" as const,
+    icon: GitMerge,
+    border: "border-line/70",
     text: "text-muted",
   },
 };
@@ -105,9 +116,11 @@ function FindingCard({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted/60">
-            {finding.kind === "intersectional"
-              ? "intersectional"
-              : "single attribute"}
+            {finding.kind === "generalized"
+              ? "generalized · treatment × context"
+              : finding.kind === "intersectional"
+                ? "intersectional"
+                : "single attribute"}
           </p>
           <h4 className="mt-0.5 text-[14px] font-semibold">
             {findingTitle(finding)}
@@ -118,6 +131,23 @@ function FindingCard({
           {meta.label}
         </Badge>
       </div>
+
+      {finding.kind === "generalized" && finding.treatment && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <Badge variant="outline">
+            treatment · {probeLabel(finding.treatment)} ={" "}
+            {finding.treatment_level ?? "?"}
+          </Badge>
+          {Object.entries(finding.context ?? {}).map(([key, value]) => (
+            <Badge key={key} variant="outline">
+              context · {probeLabel(key)} = {value}
+            </Badge>
+          ))}
+          {Object.keys(finding.context ?? {}).length === 0 && (
+            <Badge variant="outline">context · whole population</Badge>
+          )}
+        </div>
+      )}
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <EvidenceStat label="net flip" value={signedPercent(finding.evidence.net_flip_rate)} tone={meta.text} />
@@ -141,6 +171,12 @@ function FindingCard({
           </span>
         )}
       </div>
+
+      {finding.merged_into && (
+        <p className="mt-2 font-mono text-[10px] text-muted">
+          merged into <span className="text-ink">{finding.merged_into}</span>
+        </p>
+      )}
 
       <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
         <span className="text-ink">Why: </span>
@@ -450,13 +486,13 @@ function SignOff({
           </Badge>
           <p className="mt-2 text-[12px] text-ink">{decision.approver}</p>
           <p className="font-mono text-[10px] text-muted">
-            certificate #{decision.certificate_index} ·{" "}
+            Audit Record #{decision.certificate_index} ·{" "}
             {decision.decided_at}
           </p>
           <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
             {readOnly
-              ? "This decision was part of the recording. A replay cannot change it or issue a new certificate."
-              : "A named human signed this decision. The certificate is tamper-evident; it does not prove authorship."}
+              ? "This decision was part of the recording. A replay cannot change it or issue a new Audit Record."
+              : "A named human signed this decision. The record is tamper-evident, but that proves the bytes were not edited — not who signed them, and not that the model is fair."}
           </p>
         </div>
       ) : readOnly ? (
@@ -467,14 +503,14 @@ function SignOff({
           </Badge>
           <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
             Sign-off is disabled while replaying a recording. Nothing here can
-            write a decision or issue a certificate. Use{" "}
+            write a decision or issue an Audit Record. Use{" "}
             <span className="text-ink">Run again</span> to execute a live audit.
           </p>
         </div>
       ) : (
         <>
           <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-            No certificate without a named human. The auditor does not sign for
+            No Audit Record without a named human. The auditor does not sign for
             you.
           </p>
           <div className="mt-3 space-y-1.5">
@@ -502,7 +538,7 @@ function SignOff({
               ) : (
                 <FileCheck2 className="h-4 w-4" aria-hidden="true" />
               )}
-              Approve & issue certificate
+              Approve & issue Audit Record
             </Button>
             <Button
               variant="danger"
@@ -527,7 +563,7 @@ function SignOff({
             to="/certificates"
             className="mt-2 inline-flex items-center gap-1 text-[10.5px] text-accent hover:underline"
           >
-            Open the certificate chain
+            Open the Audit Record chain
             <ArrowRight className="h-3 w-3" aria-hidden="true" />
           </Link>
         </div>
@@ -691,6 +727,9 @@ export function ReportPanel({
           <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted">
             <Badge variant="ok">{counts.kept} kept</Badge>
             <Badge variant="danger">{counts.rejected} rejected</Badge>
+            {counts.merged > 0 && (
+              <Badge variant="outline">{counts.merged} merged</Badge>
+            )}
             {counts.immaterial > 0 && (
               <Badge variant="warn">{counts.immaterial} immaterial</Badge>
             )}
@@ -699,6 +738,11 @@ export function ReportPanel({
               pass.
             </span>
           </p>
+          <p className="mt-1 max-w-2xl text-[10.5px] leading-relaxed text-muted/70">
+            This Audit Record reports what these probes measured. It is not a
+            certification that the model is fair, lawful, or compliant, and a
+            null result is not proof of fairness.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -706,7 +750,7 @@ export function ReportPanel({
             className="inline-flex h-8 items-center gap-1 rounded-md border border-line px-2.5 font-mono text-[10px] text-muted hover:border-accent/45 hover:text-accent"
           >
             <Hash className="h-3 w-3" aria-hidden="true" />
-            certificates
+            audit records
           </Link>
           <ReportActions record={record} mode={mode} />
         </div>
@@ -737,7 +781,11 @@ export function ReportPanel({
       </div>
 
       <div className="mt-4 grid gap-4">
-        <Heatmap report={report} />
+        {searchSummary(report) ? (
+          <SearchPanel report={report} />
+        ) : (
+          <Heatmap report={report} />
+        )}
         <Narrative report={report} />
       </div>
     </div>

@@ -304,7 +304,7 @@ def sandbox_transport():
     return httpx.ASGITransport(app=sandbox_app)
 
 
-@pytest.mark.parametrize("model_id", range(1, 8))
+@pytest.mark.parametrize("model_id", range(1, 16))
 async def test_sandbox_adapters_validate_against_the_service(model_id, sandbox_transport):
     adapter = load_sandbox_target(model_id, transport=sandbox_transport, env={})
     assert adapter.name == f"sandbox-model-{model_id}"

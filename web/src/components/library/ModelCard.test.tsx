@@ -7,6 +7,8 @@ import { ModelCard } from "@/components/library/ModelCard";
 import { makeCatalog } from "@/test/fixtures";
 
 const cards = makeCatalog().targets;
+const realCard = cards.find((card) => card.kind === "real")!;
+const llmCard = cards.find((card) => card.kind === "llm")!;
 
 function renderCard(card = cards[0], onStart = vi.fn()) {
   render(
@@ -30,7 +32,7 @@ describe("ModelCard", () => {
   });
 
   it("lists unsupported probes for a real model", () => {
-    renderCard(cards[7]);
+    renderCard(realCard);
     expect(screen.getByText("real model")).toBeInTheDocument();
     expect(screen.getByText("ready")).toBeInTheDocument();
     const unsupported = screen.getByLabelText("Unsupported probes");
@@ -40,7 +42,7 @@ describe("ModelCard", () => {
   });
 
   it("disables Start Audit for an unavailable LLM screener and explains why", () => {
-    renderCard(cards[9]);
+    renderCard(llmCard);
     const start = screen.getByRole("button", { name: /start audit/i });
     expect(start).toBeDisabled();
     expect(screen.getByText("unavailable")).toBeInTheDocument();

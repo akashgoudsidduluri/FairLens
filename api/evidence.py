@@ -228,14 +228,147 @@ def _real_models(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
     return models
 
 
+_SUITE_B_MATERIALITY = 0.02
+
+
+def _suite_b_models(
+    rows: list[dict[str, str]], fairlearn_rows: list[dict[str, str]]
+) -> list[dict[str, Any]]:
+    """Suite B rows at the pre-registered materiality, plus Fairlearn gaps.
+
+    The 1%/3% sensitivity rows stay in ``suite_b.csv`` for the report but are
+    never averaged into the headline table: the pre-registered materiality is 2%
+    and the sensitivity is not a second chance to pick a better result.
+    """
+
+    grouped: OrderedDict[int, list[dict[str, str]]] = OrderedDict()
+    for row in rows:
+        if (row.get("suite") or "").strip().upper() != "B":
+            continue
+        materiality = _number(row.get("materiality"))
+        if materiality is None or abs(materiality - _SUITE_B_MATERIALITY) > 1e-9:
+            continue
+        model_id = _integer(row.get("model_id"))
+        if model_id is None:
+            continue
+        grouped.setdefault(model_id, []).append(row)
+
+    gaps: dict[int, tuple[float, str]] = {}
+    for row in fairlearn_rows:
+        model_id = _integer(row.get("model_id"))
+        gap = _number(row.get("dp_difference"))
+        if model_id is None or gap is None:
+            continue
+        attribute = (row.get("attribute") or "").strip()
+        if model_id not in gaps or gap > gaps[model_id][0]:
+            gaps[model_id] = (gap, attribute)
+
+    models: list[dict[str, Any]] = []
+    for model_id in sorted(grouped):
+        runs = grouped[model_id]
+        kept = [float(_integer(row.get("kept")) or 0) for row in runs]
+        candidates = [
+            float(_integer(row.get("candidates")) or 0) for row in runs
+        ]
+        confirmed = [float(_integer(row.get("confirmed")) or 0) for row in runs]
+        expectation_values = [
+            row.get("expectation", "").strip().upper() for row in runs
+        ]
+        expectation_total = sum(
+            1 for value in expectation_values if value in {"PASS", "MISS"}
+        )
+        expectation_passed = sum(1 for value in expectation_values if value == "PASS")
+        before = [
+            value
+            for value in (_integer(row.get("false_alarm_before")) for row in runs)
+            if value is not None
+        ]
+        after = [
+            value
+            for value in (_integer(row.get("false_alarm_after")) for row in runs)
+            if value is not None
+        ]
+        mde200 = next(
+            (
+                value
+                for value in (_number(row.get("mde_n200")) for row in runs)
+                if value is not None
+            ),
+            None,
+        )
+        mde1000 = next(
+            (
+                value
+                for value in (_number(row.get("mde_n1000")) for row in runs)
+                if value is not None
+            ),
+            None,
+        )
+        gap, gap_attribute = gaps.get(model_id, (None, ""))
+        models.append(
+            {
+                "model_id": model_id,
+                "runs": len(runs),
+                "expectation_passed": expectation_passed,
+                "expectation_total": expectation_total,
+                "kept_mean": _mean(kept),
+                "kept_min": int(min(kept)),
+                "kept_max": int(max(kept)),
+                "candidates_mean": _mean(candidates),
+                "confirmed_mean": _mean(confirmed),
+                "cells_examined": int(
+                    round(
+                        _mean(
+                            [
+                                value
+                                for value in (
+                                    _integer(row.get("cells_examined")) for row in runs
+                                )
+                                if value is not None
+                            ]
+                        )
+                    )
+                ),
+                "false_alarm_before": sum(before) if before else None,
+                "false_alarm_after": sum(after) if after else None,
+                "runtime_mean_s": _mean(
+                    [
+                        value
+                        for value in (_number(row.get("runtime_s")) for row in runs)
+                        if value is not None
+                    ]
+                ),
+                "mde_n200": mde200,
+                "mde_n1000": mde1000,
+                "kept_ids": _unique(
+                    identifier
+                    for row in runs
+                    for identifier in (row.get("kept_ids") or "").split(";")
+                ),
+                "misses": _unique(row.get("misses", "") for row in runs),
+                "notes": _unique(row.get("notes", "") for row in runs),
+                "dose_response": _unique(
+                    row.get("dose_response", "") for row in runs
+                ),
+                "max_dp_gap": gap,
+                "max_dp_attribute": gap_attribute,
+            }
+        )
+    return models
+
+
 def build_evidence(directory: Path | None = None) -> dict[str, Any]:
     root = directory or results_directory()
     sandbox_rows = _read_rows(root / "results.csv")
     real_rows = _read_rows(root / "real_models.csv")
     markdown = _read_text(root / "real_models.md")
+    suite_b_rows = _read_rows(root / "suite_b.csv")
+    suite_b_fairlearn_rows = _read_rows(root / "suite_b_fairlearn.csv")
+    suite_b_markdown = _read_text(root / "suite_b.md")
 
     sandbox_models = _sandbox_models(sandbox_rows)
     real_models = _real_models(real_rows)
+    suite_b_models = _suite_b_models(suite_b_rows, suite_b_fairlearn_rows)
 
     before_values = [
         model["false_alarm_before"]
@@ -272,6 +405,22 @@ def build_evidence(directory: Path | None = None) -> dict[str, Any]:
                 _source(root / "real_models.csv"),
                 _source(root / "fairlearn.csv"),
                 _source(root / "real_models.md"),
+            ],
+        },
+        "suite_b": {
+            "models": suite_b_models,
+            "runs": sum(model["runs"] for model in suite_b_models),
+            "expectation_passed": sum(
+                model["expectation_passed"] for model in suite_b_models
+            ),
+            "expectation_total": sum(
+                model["expectation_total"] for model in suite_b_models
+            ),
+            "markdown": suite_b_markdown,
+            "sources": [
+                _source(root / "suite_b.csv"),
+                _source(root / "suite_b_fairlearn.csv"),
+                _source(root / "suite_b.md"),
             ],
         },
     }

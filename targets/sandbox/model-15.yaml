@@ -1,0 +1,6 @@
+base: _sandbox.yaml
+name: sandbox-model-15
+description: Synthetic sandbox model 15 (suite B control)
+request:
+  query:
+    model: 15

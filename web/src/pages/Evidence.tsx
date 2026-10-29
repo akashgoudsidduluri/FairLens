@@ -14,6 +14,7 @@ import type {
   EvidenceReport,
   RealModelEvidence,
   SandboxModelEvidence,
+  SuiteBModelEvidence,
 } from "@/api-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -185,6 +186,139 @@ function PreRegistrationMisses({ rows }: { rows: SandboxModelEvidence[] }) {
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SuiteBTable({ rows }: { rows: SuiteBModelEvidence[] }) {
+  return (
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full min-w-[880px] border-collapse text-left">
+        <caption className="sr-only">
+          Suite B: planted treatment and context, kept findings, discovery and
+          confirmation counts, MDE, and the Fairlearn gap on the same data
+        </caption>
+        <thead>
+          <tr className="border-b border-line/70 font-mono text-[9px] uppercase tracking-[0.12em] text-muted/70">
+            <th className="px-2 py-2 font-normal">model</th>
+            <th className="px-2 py-2 font-normal">pre-registered</th>
+            <th className="px-2 py-2 font-normal">kept findings</th>
+            <th className="px-2 py-2 font-normal">cells · candidates → confirmed</th>
+            <th className="px-2 py-2 font-normal">false alarms before → after</th>
+            <th className="px-2 py-2 font-normal">MDE n=200</th>
+            <th className="px-2 py-2 font-normal">largest Fairlearn DP</th>
+            <th className="px-2 py-2 font-normal">runtime</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const met =
+              row.expectation_total > 0 &&
+              row.expectation_passed === row.expectation_total;
+            return (
+              <tr key={row.model_id} className="border-b border-line/40 align-top">
+                <td className="px-2 py-2.5 text-[12px] text-ink">
+                  {row.model_id === 15 ? "Control 15" : `Model ${row.model_id}`}
+                </td>
+                <td className="px-2 py-2.5">
+                  <Badge variant={met ? "ok" : "danger"}>
+                    {row.expectation_passed}/{row.expectation_total} met
+                  </Badge>
+                </td>
+                <td className="px-2 py-2.5 font-mono text-[11px] text-ink">
+                  {decimal(row.kept_mean)}
+                  <span className="text-muted">
+                    {" "}
+                    ({row.kept_min}–{row.kept_max})
+                  </span>
+                </td>
+                <td className="px-2 py-2.5 font-mono text-[10.5px] text-muted">
+                  {row.cells_examined} · {decimal(row.candidates_mean)} →{" "}
+                  {decimal(row.confirmed_mean)}
+                </td>
+                <td className="px-2 py-2.5 font-mono text-[11px] text-ink">
+                  {row.false_alarm_before ?? 0} → {row.false_alarm_after ?? 0}
+                  <span className="ml-1 text-[9.5px] text-muted">
+                    over {row.runs} runs
+                  </span>
+                </td>
+                <td className="px-2 py-2.5 font-mono text-[10.5px] text-muted">
+                  {row.mde_n200 === null || row.mde_n200 === undefined
+                    ? "—"
+                    : row.mde_n200.toFixed(3)}
+                </td>
+                <td className="px-2 py-2.5 font-mono text-[10.5px] text-muted">
+                  {row.max_dp_gap === null || row.max_dp_gap === undefined
+                    ? "—"
+                    : `${percent(row.max_dp_gap)} (${row.max_dp_attribute})`}
+                </td>
+                <td className="px-2 py-2.5 font-mono text-[10.5px] text-muted">
+                  {row.runtime_mean_s.toFixed(1)}s
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SuiteBMisses({ rows }: { rows: SuiteBModelEvidence[] }) {
+  const reported = rows.filter(
+    (row) => row.misses.length > 0 || row.notes.length > 0,
+  );
+  if (reported.length === 0) {
+    return (
+      <p className="mt-3 flex items-center gap-2 text-[11.5px] text-ok">
+        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+        Every suite B model met its pre-registered pass criteria, with no notes.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3 space-y-2">
+      {reported.map((row) => (
+        <div
+          key={row.model_id}
+          className="rounded-lg border border-warn/35 bg-warn/[0.045] p-3"
+        >
+          <p className="flex items-center gap-2 text-[12px] font-semibold text-warn">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+            {row.model_id === 15 ? "Control 15" : `Model ${row.model_id}`}
+            {row.misses.length > 0 ? " missed a criterion" : " has a reported note"}
+          </p>
+          {row.misses.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {row.misses.map((miss) => (
+                <li
+                  key={miss}
+                  className="font-mono text-[10.5px] leading-relaxed text-muted"
+                >
+                  MISS · {miss}
+                </li>
+              ))}
+            </ul>
+          )}
+          {row.notes.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {row.notes.map((note) => (
+                <li
+                  key={note}
+                  className="font-mono text-[10.5px] leading-relaxed text-muted"
+                >
+                  note · {note}
+                </li>
+              ))}
+            </ul>
+          )}
+          {row.kept_ids.length > 0 && (
+            <p className="mt-2 font-mono text-[9.5px] text-muted/80">
+              kept: {row.kept_ids.join(", ")}
+            </p>
           )}
         </div>
       ))}
@@ -433,6 +567,74 @@ export function Evidence() {
         <div className="mt-3">
           <SourceStrip sources={sandbox.sources} />
         </div>
+      </section>
+
+      <section className="mt-10" aria-labelledby="suite-b-heading">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line/70 pb-3">
+          <div>
+            <p className="eyebrow">validation suite B · generalized protocol</p>
+            <h2
+              id="suite-b-heading"
+              className="mt-1 flex items-center gap-2 text-xl font-semibold tracking-[-0.02em]"
+            >
+              <BarChart3 className="h-4 w-4 text-accent" aria-hidden="true" />
+              Treatment × context, discovered then confirmed
+            </h2>
+            <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-muted">
+              Models 8–14 plant an effect in a specific treatment and context;
+              Model 15 is the clean control. Each audit ran the same 110-cell
+              discovery panel, Holm across every cell, then 400 fresh pairs per
+              candidate. The pre-registration and pass criteria were frozen
+              before the run.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant={
+                evidence.suite_b.expectation_passed ===
+                evidence.suite_b.expectation_total
+                  ? "ok"
+                  : "danger"
+              }
+            >
+              {evidence.suite_b.expectation_passed}/
+              {evidence.suite_b.expectation_total} expectations met
+            </Badge>
+            <Badge variant="outline">{evidence.suite_b.runs} audits</Badge>
+          </div>
+        </div>
+
+        {evidence.suite_b.models.length > 0 ? (
+          <>
+            <SuiteBTable rows={evidence.suite_b.models} />
+            <SuiteBMisses rows={evidence.suite_b.models} />
+          </>
+        ) : (
+          <p className="mt-4 rounded-lg border border-dashed border-line/70 px-3 py-4 text-[11px] text-muted">
+            No suite B result file was found. The section is left empty rather
+            than padded with a placeholder number.
+          </p>
+        )}
+
+        <div className="mt-3">
+          <SourceStrip sources={evidence.suite_b.sources} />
+        </div>
+
+        {evidence.suite_b.markdown ? (
+          <details className="panel mt-3 overflow-hidden">
+            <summary className="cursor-pointer border-b border-line/60 px-4 py-2 font-mono text-[10px] text-muted hover:text-accent">
+              suite_b.md — the full suite B report and limitations
+            </summary>
+            <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap px-4 py-3 font-mono text-[10.5px] leading-relaxed text-muted">
+              {evidence.suite_b.markdown}
+            </pre>
+          </details>
+        ) : (
+          <p className="mt-3 rounded-lg border border-dashed border-line/70 px-3 py-4 text-[11px] text-muted">
+            The suite B notes file is missing, so no limitations summary is
+            shown.
+          </p>
+        )}
       </section>
 
       <section className="mt-10" aria-labelledby="real-heading">

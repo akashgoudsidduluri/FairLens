@@ -45,6 +45,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export const PROBE_LABELS: Record<string, string> = {
   gender: "gender",
+  age: "age band",
   age_band: "age band",
   pincode_group: "region group",
   name_group: "name group",
@@ -77,7 +78,7 @@ export const FIELD_LABELS: Record<string, string> = {
   credit_score: "credit score",
   employment_years: "employment years",
   loan_amount: "loan amount",
-  age: "age",
+  age: "age band",
   pincode: "pincode",
   name: "name",
 };

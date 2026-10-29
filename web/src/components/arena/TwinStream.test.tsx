@@ -46,7 +46,7 @@ describe("TwinStream", () => {
       />,
     );
     expect(screen.getAllByText("age band · changed")).toHaveLength(2);
-    expect(screen.getByText("changed: age")).toBeInTheDocument();
+    expect(screen.getByText("changed: age band")).toBeInTheDocument();
   });
 
   it("fades matching pairs after a moment while flips stay readable", () => {

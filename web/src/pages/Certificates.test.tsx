@@ -54,7 +54,7 @@ describe("Certificates page", () => {
     certificates.mockResolvedValue({ records: [], count: 0 });
     renderPage();
 
-    expect(await screen.findByText("No certificates yet.")).toBeInTheDocument();
+    expect(await screen.findByText("No audit records yet.")).toBeInTheDocument();
     expect(screen.getByText(/not checked · 0 records/)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /verify chain/i }),
@@ -92,9 +92,9 @@ describe("Certificates page", () => {
 
     expect(await screen.findByText("Dr A. Rao")).toBeInTheDocument();
     expect(screen.getByText("S. Iyer")).toBeInTheDocument();
-    expect(within(screen.getByLabelText("Certificate 0")).getByText("genesis")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Audit Record 0")).getByText("genesis")).toBeInTheDocument();
     expect(
-      within(screen.getByLabelText("Certificate 0")).getByText("a".repeat(64)),
+      within(screen.getByLabelText("Audit Record 0")).getByText("a".repeat(64)),
     ).toBeInTheDocument();
     expect(screen.getByText(/not checked · 2 records/)).toBeInTheDocument();
 
@@ -143,12 +143,12 @@ describe("Certificates page", () => {
       screen.getByText(/First break at record #1/),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByLabelText("Certificate 1")).getByText(
+      within(screen.getByLabelText("Audit Record 1")).getByText(
         /first broken record/,
       ),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByLabelText("Certificate 0")).queryByText(
+      within(screen.getByLabelText("Audit Record 0")).queryByText(
         /first broken record/,
       ),
     ).not.toBeInTheDocument();

@@ -33,7 +33,7 @@ export function Certificates() {
         setLoadError(
           cause instanceof ApiError
             ? cause.detail
-            : "could not read the certificate store",
+            : "could not read the audit record store",
         ),
       );
   }, []);
@@ -96,12 +96,17 @@ export function Certificates() {
         <div>
           <p className="eyebrow">trust layer</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-[-0.025em] sm:text-3xl">
-            Certificate chain
+            Audit Record chain
           </h1>
           <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted">
-            Each human decision appends one record whose hash covers the previous
-            record. Verification recomputes the chain; it proves tamper-evidence,
-            not authorship.
+            Each human decision appends one Audit Record whose hash covers the
+            previous record. Verification recomputes the chain; it proves
+            tamper-evidence, not authorship.
+          </p>
+          <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted/70">
+            An Audit Record documents what one audit measured and who signed off
+            on it. It is not a certification that the model is fair, lawful, or
+            compliant.
           </p>
         </div>
         <VerifyBadge state={verify} count={count} />
@@ -145,7 +150,7 @@ export function Certificates() {
 
       {records === null && !loadError && (
         <div className="mt-6">
-          <LoadingLine>reading the certificate store…</LoadingLine>
+          <LoadingLine>reading the audit record store…</LoadingLine>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <CardSkeleton lines={5} />
             <CardSkeleton lines={5} />
@@ -154,10 +159,10 @@ export function Certificates() {
       )}
 
       {records && records.length === 0 && (
-        <section className="panel mt-6 p-6" aria-label="Empty certificate chain">
+        <section className="panel mt-6 p-6" aria-label="Empty audit record chain">
           <div className="flex items-center gap-2 text-muted">
             <Hash className="h-4 w-4" aria-hidden="true" />
-            <p className="text-[13px]">No certificates yet.</p>
+            <p className="text-[13px]">No audit records yet.</p>
           </div>
           <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
             Open a completed audit, enter an approver name, and issue a decision.

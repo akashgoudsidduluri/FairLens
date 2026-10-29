@@ -267,7 +267,7 @@ describe("ReportPanel", () => {
     ).toBeInTheDocument();
   });
 
-  it("blocks sign-off without a name and issues a certificate with one", async () => {
+  it("blocks sign-off without a name and issues an Audit Record with one", async () => {
     const user = userEvent.setup();
     decide.mockResolvedValue({
       audit: record({
@@ -289,7 +289,7 @@ describe("ReportPanel", () => {
     const { onDecided } = renderPanel();
 
     const approve = screen.getByRole("button", {
-      name: /approve & issue certificate/i,
+      name: /approve & issue audit record/i,
     });
     expect(approve).toBeDisabled();
     expect(
@@ -305,10 +305,10 @@ describe("ReportPanel", () => {
     expect(
       (await within(signOff).findAllByText("Dr A. Rao")).length,
     ).toBeGreaterThan(0);
-    expect(screen.getByText(/certificate #0/)).toBeInTheDocument();
+    expect(screen.getByText(/Audit Record #0/)).toBeInTheDocument();
     expect(screen.getByText(/tamper-evident/)).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /open the certificate chain/i }),
+      screen.getByRole("link", { name: /open the audit record chain/i }),
     ).toHaveAttribute("href", "/certificates");
     expect(onDecided).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -368,7 +368,7 @@ describe("ReportPanel", () => {
     expect(screen.getByText(/read-only recording/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/approver name/i)).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /approve & issue certificate/i }),
+      screen.queryByRole("button", { name: /approve & issue audit record/i }),
     ).not.toBeInTheDocument();
   });
 });

@@ -123,6 +123,7 @@ export interface EvidenceReport {
   sandbox: SandboxEvidence;
   real: RealEvidence;
   suite_b: SuiteBEvidence;
+  suite_b_r51: SuiteBEvidence;
 }
 
 export interface EvidenceSource {

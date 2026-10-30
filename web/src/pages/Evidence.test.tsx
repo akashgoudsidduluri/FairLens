@@ -67,9 +67,9 @@ function payload(): EvidenceReport {
       ],
     },
     suite_b: {
-      runs: 2,
+      runs: 4,
       expectation_passed: 2,
-      expectation_total: 2,
+      expectation_total: 4,
       markdown:
         "# Suite B and the generalized protocol (R5 Step 7)\n\nLimitations stay attached.",
       sources: [
@@ -102,6 +102,89 @@ function payload(): EvidenceReport {
           dose_response: ["45:+0.0000; 55:+0.6100"],
           max_dp_gap: 0.31,
           max_dp_attribute: "age_band",
+        },
+        {
+          model_id: 9,
+          runs: 2,
+          expectation_passed: 0,
+          expectation_total: 2,
+          kept_mean: 8,
+          kept_min: 8,
+          kept_max: 8,
+          candidates_mean: 16,
+          confirmed_mean: 16,
+          cells_examined: 110,
+          false_alarm_before: 30,
+          false_alarm_after: 6,
+          runtime_mean_s: 61,
+          mde_n200: 0.099,
+          mde_n1000: 0.044,
+          kept_ids: ["gen-pincode_group-p2-gender-female-loan_amount-high"],
+          misses: ["expected exactly one kept finding, got 9"],
+          notes: [],
+          dose_response: [],
+          max_dp_gap: 0.39,
+          max_dp_attribute: "pincode_group",
+        },
+      ],
+    },
+    suite_b_r51: {
+      runs: 4,
+      expectation_passed: 3,
+      expectation_total: 4,
+      markdown:
+        "# R5.1 sibling-context merge - protocol 2\n\nDesigned after protocol 1 was reported.",
+      sources: [
+        { path: "eval/results/suite_b_r51.csv", present: true },
+        { path: "eval/results/suite_b_r51_fairlearn.csv", present: true },
+        { path: "eval/results/suite_b_r51.md", present: true },
+      ],
+      models: [
+        {
+          model_id: 8,
+          runs: 2,
+          expectation_passed: 2,
+          expectation_total: 2,
+          kept_mean: 1,
+          kept_min: 1,
+          kept_max: 1,
+          candidates_mean: 16,
+          confirmed_mean: 16,
+          cells_examined: 110,
+          false_alarm_before: 10,
+          false_alarm_after: 2,
+          runtime_mean_s: 71,
+          mde_n200: 0.099,
+          mde_n1000: 0.044,
+          kept_ids: ["gen-age-45plus-credit_score-high"],
+          misses: [],
+          notes: [],
+          dose_response: ["45:+0.0000; 55:+0.6100"],
+          max_dp_gap: 0.31,
+          max_dp_attribute: "age_band",
+        },
+        {
+          model_id: 9,
+          runs: 2,
+          expectation_passed: 1,
+          expectation_total: 2,
+          kept_mean: 1.5,
+          kept_min: 1,
+          kept_max: 2,
+          candidates_mean: 16,
+          confirmed_mean: 16,
+          cells_examined: 110,
+          false_alarm_before: 30,
+          false_alarm_after: 3,
+          runtime_mean_s: 71,
+          mde_n200: 0.099,
+          mde_n1000: 0.044,
+          kept_ids: ["gen-pincode_group-p2-gender-female-loan_amount-high"],
+          misses: ["expected exactly one kept finding, got 2"],
+          notes: [],
+          dose_response: [],
+          max_dp_gap: 0.39,
+          max_dp_attribute: "pincode_group",
         },
       ],
     },
@@ -210,12 +293,35 @@ describe("Evidence page", () => {
         name: /treatment × context, discovered then confirmed/i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText("2/2 met")).toBeInTheDocument();
+    expect(screen.getAllByText("2/2 met").length).toBeGreaterThan(0);
     expect(
       screen.getByText(/gen-age-45plus-credit_score-high/),
     ).toBeInTheDocument();
     expect(screen.getByText(/context-specific, not the pre-registered main effect/)).toBeInTheDocument();
     expect(screen.getAllByText(/suite_b\.md/).length).toBeGreaterThan(0);
+  });
+
+  it("shows protocol 2 next to protocol 1 with the headline deltas", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /treatment × context, discovered then confirmed/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("P1 2/4 met")).toBeInTheDocument();
+    expect(screen.getByText("P2 3/4 met")).toBeInTheDocument();
+    expect(screen.getByText("2/4 → 3/4")).toBeInTheDocument();
+    expect(screen.getByText("4.5 → 1.3")).toBeInTheDocument();
+    expect(screen.getByText("8 → 5")).toBeInTheDocument();
+    expect(
+      screen.getByText(/protocol 2 is a refinement, not a clean first pass/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/designed after protocol 1's results/i),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/suite_b_r51\.md/).length).toBeGreaterThan(0);
+    expect(screen.getByText("MISS · expected exactly one kept finding, got 2")).toBeInTheDocument();
   });
 
   it("shows a retry state when the API fails", async () => {

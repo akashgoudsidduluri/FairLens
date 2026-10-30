@@ -291,6 +291,7 @@ class EvidenceReport(ServiceModel):
     sandbox: SandboxEvidence
     real: RealEvidence
     suite_b: SuiteBEvidence
+    suite_b_r51: SuiteBEvidence
 
 
 class TargetAvailability(ServiceModel):

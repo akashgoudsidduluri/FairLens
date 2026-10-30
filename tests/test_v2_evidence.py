@@ -48,6 +48,19 @@ SUITE_B_FAIRLEARN_CSV = """model_id,attribute,n,dp_difference,eo_difference,appr
 
 SUITE_B_MARKDOWN = "# Suite B and the generalized protocol (R5 Step 7)\n\nLimitations stay attached.\n"
 
+SUITE_B_R51_CSV = """suite,model_id,seed,materiality,runtime_s,cells_examined,cells_tested,discovery_pairs,confirmation_pairs,candidates,confirmed,kept,rejected,immaterial,merged,kept_ids,expectation,misses,notes,false_alarm_before,false_alarm_after,mde_n200,mde_n1000,planned_applicants,diagnostic_applicants,probe_cap,dose_response,error
+B,8,1,0.02,70.0,110,110,26000,6400,16,16,1,11,0,15,gen-age-45plus-credit_score-high,PASS,,,5,1,0.099,0.044,68800,4000,100000,45:+0.0000; 55:+0.6100,
+B,8,2,0.02,72.0,110,110,26000,6400,16,16,1,11,0,15,gen-age-45plus-credit_score-high,PASS,,,5,1,0.099,0.044,68800,4000,100000,45:+0.0000; 55:+0.6100,
+B,15,1,0.02,65.0,110,110,26000,0,0,0,0,0,0,0,,PASS,,,0,0,0.099,0.044,68800,0,100000,,
+"""
+
+SUITE_B_R51_FAIRLEARN_CSV = SUITE_B_FAIRLEARN_CSV
+
+SUITE_B_R51_MARKDOWN = (
+    "# R5.1 sibling-context merge - protocol 2\n\n"
+    "Protocol 1 is shown beside it, not replaced.\n"
+)
+
 
 def _config(tmp_path: Path) -> dict:
     config = load_config()
@@ -68,6 +81,13 @@ def _write_results(directory: Path) -> None:
         SUITE_B_FAIRLEARN_CSV, encoding="utf-8"
     )
     (directory / "suite_b.md").write_text(SUITE_B_MARKDOWN, encoding="utf-8")
+    (directory / "suite_b_r51.csv").write_text(SUITE_B_R51_CSV, encoding="utf-8")
+    (directory / "suite_b_r51_fairlearn.csv").write_text(
+        SUITE_B_R51_FAIRLEARN_CSV, encoding="utf-8"
+    )
+    (directory / "suite_b_r51.md").write_text(
+        SUITE_B_R51_MARKDOWN, encoding="utf-8"
+    )
 
 
 def test_sandbox_aggregation_expected_found_and_false_alarms(tmp_path):
@@ -129,9 +149,14 @@ def test_missing_results_do_not_invent_numbers(tmp_path):
     assert evidence["real"]["markdown"] == ""
     assert evidence["suite_b"]["models"] == []
     assert evidence["suite_b"]["markdown"] == ""
+    assert evidence["suite_b_r51"]["models"] == []
+    assert evidence["suite_b_r51"]["markdown"] == ""
     assert all(not source["present"] for source in evidence["sandbox"]["sources"])
     assert all(not source["present"] for source in evidence["real"]["sources"])
     assert all(not source["present"] for source in evidence["suite_b"]["sources"])
+    assert all(
+        not source["present"] for source in evidence["suite_b_r51"]["sources"]
+    )
 
 
 def test_suite_b_aggregation_ignores_the_sensitivity_rows(tmp_path):
@@ -168,6 +193,34 @@ def test_suite_b_aggregation_ignores_the_sensitivity_rows(tmp_path):
     assert suite_b["markdown"].startswith("# Suite B")
 
 
+def test_suite_b_r51_is_aggregated_from_its_own_files(tmp_path):
+    _write_results(tmp_path)
+    evidence = build_evidence(tmp_path)
+    protocol_1 = evidence["suite_b"]
+    protocol_2 = evidence["suite_b_r51"]
+
+    # The two protocols are read independently: protocol 1's false-alarm count
+    # is unchanged by the protocol-2 fixture.
+    assert protocol_1["models"][0]["false_alarm_before"] == 54
+    assert protocol_2["runs"] == 3
+    assert protocol_2["expectation_passed"] == 3
+    assert protocol_2["expectation_total"] == 3
+    assert [model["model_id"] for model in protocol_2["models"]] == [8, 15]
+
+    eight, control = protocol_2["models"]
+    assert eight["kept_mean"] == 1
+    assert eight["kept_ids"] == ["gen-age-45plus-credit_score-high"]
+    assert eight["false_alarm_before"] == 10
+    assert eight["false_alarm_after"] == 2
+    assert control["kept_mean"] == 0
+    assert protocol_2["markdown"].startswith("# R5.1")
+    assert [source["present"] for source in protocol_2["sources"]] == [
+        True,
+        True,
+        True,
+    ]
+
+
 @pytest.fixture
 async def evidence_client(tmp_path):
     results = tmp_path / "results"
@@ -195,6 +248,11 @@ async def test_evidence_route_serves_the_computed_payload(evidence_client):
     assert body["suite_b"]["models"][0]["model_id"] == 8
     assert body["suite_b"]["models"][0]["kept_ids"] == ["gen-age-45plus"]
     assert body["suite_b"]["markdown"].startswith("# Suite B")
+    assert body["suite_b_r51"]["models"][0]["model_id"] == 8
+    assert body["suite_b_r51"]["models"][0]["kept_ids"] == [
+        "gen-age-45plus-credit_score-high"
+    ]
+    assert body["suite_b_r51"]["markdown"].startswith("# R5.1")
     assert body["generated_at"]
 
 
@@ -213,4 +271,6 @@ async def test_evidence_route_reports_absent_files(tmp_path):
         assert body["real"]["sources"][0]["present"] is False
         assert body["suite_b"]["models"] == []
         assert body["suite_b"]["sources"][0]["present"] is False
+        assert body["suite_b_r51"]["models"] == []
+        assert body["suite_b_r51"]["sources"][0]["present"] is False
     await context.__aexit__(None, None, None)

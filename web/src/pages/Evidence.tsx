@@ -267,6 +267,200 @@ function SuiteBTable({ rows }: { rows: SuiteBModelEvidence[] }) {
   );
 }
 
+type ProtocolTotals = {
+  runs: number;
+  keptMean: number;
+  keptMin: number;
+  keptMax: number;
+  passed: number;
+  total: number;
+  falseAlarmBefore: number;
+  falseAlarmAfter: number;
+};
+
+function protocolTotals(rows: SuiteBModelEvidence[]): ProtocolTotals {
+  const runs = rows.reduce((sum, row) => sum + row.runs, 0);
+  const kept = rows.reduce((sum, row) => sum + row.kept_mean * row.runs, 0);
+  return {
+    runs,
+    keptMean: runs > 0 ? kept / runs : 0,
+    keptMin: rows.length > 0 ? Math.min(...rows.map((row) => row.kept_min)) : 0,
+    keptMax: rows.length > 0 ? Math.max(...rows.map((row) => row.kept_max)) : 0,
+    passed: rows.reduce((sum, row) => sum + row.expectation_passed, 0),
+    total: rows.reduce((sum, row) => sum + row.expectation_total, 0),
+    falseAlarmBefore: rows.reduce(
+      (sum, row) => sum + (row.false_alarm_before ?? 0),
+      0,
+    ),
+    falseAlarmAfter: rows.reduce(
+      (sum, row) => sum + (row.false_alarm_after ?? 0),
+      0,
+    ),
+  };
+}
+
+function SuiteBComparison({
+  p1,
+  p2,
+}: {
+  p1: SuiteBModelEvidence[];
+  p2: SuiteBModelEvidence[];
+}) {
+  const p1ById = new Map(p1.map((row) => [row.model_id, row]));
+  const p2ById = new Map(p2.map((row) => [row.model_id, row]));
+  const ids = Array.from(
+    new Set([...p1.map((row) => row.model_id), ...p2.map((row) => row.model_id)]),
+  ).sort((left, right) => left - right);
+  const total1 = protocolTotals(p1);
+  const total2 = protocolTotals(p2);
+
+  return (
+    <>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <Stat
+          label="expectations met"
+          value={`${total1.passed}/${total1.total} → ${total2.passed}/${total2.total}`}
+          hint="protocol 1 → protocol 2"
+        />
+        <Stat
+          label="kept findings per audit"
+          value={`${decimal(total1.keptMean)} → ${decimal(total2.keptMean)}`}
+          hint={`range ${total1.keptMin}–${total1.keptMax} → ${total2.keptMin}–${total2.keptMax}`}
+        />
+        <Stat
+          label="false alarms after Skeptic"
+          value={`${total1.falseAlarmAfter} → ${total2.falseAlarmAfter}`}
+          hint={`before the Skeptic: ${total1.falseAlarmBefore} in protocol 1, ${total2.falseAlarmBefore} in protocol 2`}
+        />
+      </div>
+
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[820px] border-collapse text-left">
+          <caption className="sr-only">
+            Protocol 1 next to protocol 2: kept findings, met expectations, and
+            false alarms before and after the Skeptic
+          </caption>
+          <thead>
+            <tr className="border-b border-line/70 font-mono text-[9px] uppercase tracking-[0.12em] text-muted/70">
+              <th className="px-2 py-2 font-normal">model</th>
+              <th className="px-2 py-2 font-normal">P1 kept</th>
+              <th className="px-2 py-2 font-normal">P1 met</th>
+              <th className="px-2 py-2 font-normal">P2 kept</th>
+              <th className="px-2 py-2 font-normal">P2 met</th>
+              <th className="px-2 py-2 font-normal">P1 false alarms</th>
+              <th className="px-2 py-2 font-normal">P2 false alarms</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ids.map((modelId) => {
+              const first = p1ById.get(modelId);
+              const second = p2ById.get(modelId);
+              return (
+                <tr key={modelId} className="border-b border-line/40 align-top">
+                  <td className="px-2 py-2.5 text-[12px] text-ink">
+                    {modelId === 15 ? "Control 15" : `Model ${modelId}`}
+                  </td>
+                  <td className="px-2 py-2.5 font-mono text-[11px] text-ink">
+                    {first
+                      ? `${decimal(first.kept_mean)} (${first.kept_min}–${first.kept_max})`
+                      : "—"}
+                  </td>
+                  <td className="px-2 py-2.5">
+                    {first ? (
+                      <Badge
+                        variant={
+                          first.expectation_total > 0 &&
+                          first.expectation_passed === first.expectation_total
+                            ? "ok"
+                            : "danger"
+                        }
+                      >
+                        {first.expectation_passed}/{first.expectation_total}
+                      </Badge>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-2 py-2.5 font-mono text-[11px] text-ink">
+                    {second
+                      ? `${decimal(second.kept_mean)} (${second.kept_min}–${second.kept_max})`
+                      : "—"}
+                  </td>
+                  <td className="px-2 py-2.5">
+                    {second ? (
+                      <Badge
+                        variant={
+                          second.expectation_total > 0 &&
+                          second.expectation_passed === second.expectation_total
+                            ? "ok"
+                            : "danger"
+                        }
+                      >
+                        {second.expectation_passed}/{second.expectation_total}
+                      </Badge>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-2 py-2.5 font-mono text-[11px] text-muted">
+                    {first
+                      ? `${first.false_alarm_before ?? 0} → ${first.false_alarm_after ?? 0}`
+                      : "—"}
+                  </td>
+                  <td className="px-2 py-2.5 font-mono text-[11px] text-muted">
+                    {second
+                      ? `${second.false_alarm_before ?? 0} → ${second.false_alarm_after ?? 0}`
+                      : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+            <tr className="border-t border-line/70 bg-canvas/30 align-top">
+              <td className="px-2 py-2.5 text-[12px] font-semibold text-ink">
+                All
+              </td>
+              <td className="px-2 py-2.5 font-mono text-[11px] font-semibold text-ink">
+                {decimal(total1.keptMean)} ({total1.keptMin}–{total1.keptMax})
+              </td>
+              <td className="px-2 py-2.5">
+                <Badge
+                  variant={
+                    total1.total > 0 && total1.passed === total1.total
+                      ? "ok"
+                      : "danger"
+                  }
+                >
+                  {total1.passed}/{total1.total}
+                </Badge>
+              </td>
+              <td className="px-2 py-2.5 font-mono text-[11px] font-semibold text-ink">
+                {decimal(total2.keptMean)} ({total2.keptMin}–{total2.keptMax})
+              </td>
+              <td className="px-2 py-2.5">
+                <Badge
+                  variant={
+                    total2.total > 0 && total2.passed === total2.total
+                      ? "ok"
+                      : "danger"
+                  }
+                >
+                  {total2.passed}/{total2.total}
+                </Badge>
+              </td>
+              <td className="px-2 py-2.5 font-mono text-[11px] font-semibold text-ink">
+                {total1.falseAlarmBefore} → {total1.falseAlarmAfter}
+              </td>
+              <td className="px-2 py-2.5 font-mono text-[11px] font-semibold text-ink">
+                {total2.falseAlarmBefore} → {total2.falseAlarmAfter}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
 function SuiteBMisses({ rows }: { rows: SuiteBModelEvidence[] }) {
   const reported = rows.filter(
     (row) => row.misses.length > 0 || row.notes.length > 0,
@@ -490,6 +684,10 @@ export function Evidence() {
 
   const sandbox = evidence.sandbox;
   const real = evidence.real;
+  const suiteB = evidence.suite_b;
+  const suiteBR51 = evidence.suite_b_r51;
+  const hasProtocolComparison =
+    suiteB.models.length > 0 && suiteBR51.models.length > 0;
   const falseAlarmMeasured =
     sandbox.false_alarm_before !== null && sandbox.false_alarm_after !== null;
   const misses = sandbox.models.filter(
@@ -572,7 +770,7 @@ export function Evidence() {
       <section className="mt-10" aria-labelledby="suite-b-heading">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line/70 pb-3">
           <div>
-            <p className="eyebrow">validation suite B · generalized protocol</p>
+            <p className="eyebrow">validation suite B · two pre-registered protocols</p>
             <h2
               id="suite-b-heading"
               className="mt-1 flex items-center gap-2 text-xl font-semibold tracking-[-0.02em]"
@@ -584,30 +782,93 @@ export function Evidence() {
               Models 8–14 plant an effect in a specific treatment and context;
               Model 15 is the clean control. Each audit ran the same 110-cell
               discovery panel, Holm across every cell, then 400 fresh pairs per
-              candidate. The pre-registration and pass criteria were frozen
-              before the run.
+              candidate. Protocol 1 used the original merge. Protocol 2 adds the
+              R5.1 sibling-context rule, pre-registered after protocol 1 was
+              reported and before its own re-run. Both are shown; protocol 1 is
+              not replaced.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge
               variant={
-                evidence.suite_b.expectation_passed ===
-                evidence.suite_b.expectation_total
+                suiteB.expectation_passed === suiteB.expectation_total
                   ? "ok"
                   : "danger"
               }
             >
-              {evidence.suite_b.expectation_passed}/
-              {evidence.suite_b.expectation_total} expectations met
+              P1 {suiteB.expectation_passed}/{suiteB.expectation_total} met
             </Badge>
-            <Badge variant="outline">{evidence.suite_b.runs} audits</Badge>
+            <Badge
+              variant={
+                suiteBR51.expectation_passed === suiteBR51.expectation_total
+                  ? "ok"
+                  : "danger"
+              }
+            >
+              P2 {suiteBR51.expectation_passed}/{suiteBR51.expectation_total} met
+            </Badge>
+            <Badge variant="outline">
+              {suiteB.runs + suiteBR51.runs} suite B audits
+            </Badge>
           </div>
         </div>
 
-        {evidence.suite_b.models.length > 0 ? (
+        {hasProtocolComparison ? (
           <>
-            <SuiteBTable rows={evidence.suite_b.models} />
-            <SuiteBMisses rows={evidence.suite_b.models} />
+            <SuiteBComparison p1={suiteB.models} p2={suiteBR51.models} />
+
+            <div
+              role="note"
+              className="mt-3 rounded-lg border border-warn/35 bg-warn/[0.045] p-3"
+            >
+              <p className="flex items-center gap-2 text-[12px] font-semibold text-warn">
+                <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                Protocol 2 is a refinement, not a clean first pass.
+              </p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-ink">
+                The sibling rule was designed after protocol 1&apos;s results and
+                pre-registered before its own re-run. It is a failure-to-reject
+                rule, not an equivalence test. It collapsed 8–10 findings to 1–3
+                per audit but did not always reach exactly one. Models 11 and 14
+                keep the same disclosed misses, and the clean controls stay at
+                zero.
+              </p>
+            </div>
+
+            <div className="mt-5">
+              <h3 className="text-[13px] font-semibold">
+                Protocol 2 detail (R5.1 sibling merge)
+              </h3>
+              <SuiteBTable rows={suiteBR51.models} />
+              <SuiteBMisses rows={suiteBR51.models} />
+            </div>
+
+            <details className="panel mt-3 overflow-hidden">
+              <summary className="cursor-pointer border-b border-line/60 px-4 py-2 font-mono text-[10px] text-muted hover:text-accent">
+                Protocol 1 detail — kept ids, misses, Fairlearn, runtime
+              </summary>
+              <div className="px-4 py-3">
+                <SuiteBTable rows={suiteB.models} />
+                <SuiteBMisses rows={suiteB.models} />
+              </div>
+            </details>
+          </>
+        ) : suiteB.models.length > 0 ? (
+          <>
+            <p className="mt-4 rounded-lg border border-dashed border-line/70 px-3 py-4 text-[11px] text-muted">
+              No protocol 2 result file was found. Protocol 1 is shown alone
+              rather than padded with a placeholder number.
+            </p>
+            <SuiteBTable rows={suiteB.models} />
+            <SuiteBMisses rows={suiteB.models} />
+          </>
+        ) : suiteBR51.models.length > 0 ? (
+          <>
+            <p className="mt-4 rounded-lg border border-dashed border-line/70 px-3 py-4 text-[11px] text-muted">
+              No protocol 1 result file was found. Protocol 2 is shown alone.
+            </p>
+            <SuiteBTable rows={suiteBR51.models} />
+            <SuiteBMisses rows={suiteBR51.models} />
           </>
         ) : (
           <p className="mt-4 rounded-lg border border-dashed border-line/70 px-3 py-4 text-[11px] text-muted">
@@ -617,22 +878,38 @@ export function Evidence() {
         )}
 
         <div className="mt-3">
-          <SourceStrip sources={evidence.suite_b.sources} />
+          <SourceStrip sources={[...suiteB.sources, ...suiteBR51.sources]} />
         </div>
 
-        {evidence.suite_b.markdown ? (
+        {suiteBR51.markdown ? (
           <details className="panel mt-3 overflow-hidden">
             <summary className="cursor-pointer border-b border-line/60 px-4 py-2 font-mono text-[10px] text-muted hover:text-accent">
-              suite_b.md — the full suite B report and limitations
+              suite_b_r51.md — the protocol 2 report and limitations
             </summary>
             <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap px-4 py-3 font-mono text-[10.5px] leading-relaxed text-muted">
-              {evidence.suite_b.markdown}
+              {suiteBR51.markdown}
             </pre>
           </details>
         ) : (
           <p className="mt-3 rounded-lg border border-dashed border-line/70 px-3 py-4 text-[11px] text-muted">
-            The suite B notes file is missing, so no limitations summary is
-            shown.
+            The protocol 2 notes file is missing, so no limitations summary is
+            shown for it.
+          </p>
+        )}
+
+        {suiteB.markdown ? (
+          <details className="panel mt-3 overflow-hidden">
+            <summary className="cursor-pointer border-b border-line/60 px-4 py-2 font-mono text-[10px] text-muted hover:text-accent">
+              suite_b.md — the protocol 1 report and limitations
+            </summary>
+            <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap px-4 py-3 font-mono text-[10.5px] leading-relaxed text-muted">
+              {suiteB.markdown}
+            </pre>
+          </details>
+        ) : (
+          <p className="mt-3 rounded-lg border border-dashed border-line/70 px-3 py-4 text-[11px] text-muted">
+            The protocol 1 notes file is missing, so no limitations summary is
+            shown for it.
           </p>
         )}
       </section>

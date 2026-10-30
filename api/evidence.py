@@ -357,18 +357,43 @@ def _suite_b_models(
     return models
 
 
+def _suite_b_payload(root: Path, suffix: str = "") -> dict[str, Any]:
+    """One suite B protocol, read from its own committed files.
+
+    Protocol 1 has no suffix. Protocol 2 uses ``_r51``; both are returned
+    independently so the Evidence page can show them side by side.
+    """
+
+    rows = _read_rows(root / f"suite_b{suffix}.csv")
+    fairlearn_rows = _read_rows(root / f"suite_b{suffix}_fairlearn.csv")
+    markdown = _read_text(root / f"suite_b{suffix}.md")
+    models = _suite_b_models(rows, fairlearn_rows)
+    return {
+        "models": models,
+        "runs": sum(model["runs"] for model in models),
+        "expectation_passed": sum(
+            model["expectation_passed"] for model in models
+        ),
+        "expectation_total": sum(model["expectation_total"] for model in models),
+        "markdown": markdown,
+        "sources": [
+            _source(root / f"suite_b{suffix}.csv"),
+            _source(root / f"suite_b{suffix}_fairlearn.csv"),
+            _source(root / f"suite_b{suffix}.md"),
+        ],
+    }
+
+
 def build_evidence(directory: Path | None = None) -> dict[str, Any]:
     root = directory or results_directory()
     sandbox_rows = _read_rows(root / "results.csv")
     real_rows = _read_rows(root / "real_models.csv")
     markdown = _read_text(root / "real_models.md")
-    suite_b_rows = _read_rows(root / "suite_b.csv")
-    suite_b_fairlearn_rows = _read_rows(root / "suite_b_fairlearn.csv")
-    suite_b_markdown = _read_text(root / "suite_b.md")
 
     sandbox_models = _sandbox_models(sandbox_rows)
     real_models = _real_models(real_rows)
-    suite_b_models = _suite_b_models(suite_b_rows, suite_b_fairlearn_rows)
+    suite_b = _suite_b_payload(root)
+    suite_b_r51 = _suite_b_payload(root, "_r51")
 
     before_values = [
         model["false_alarm_before"]
@@ -407,20 +432,6 @@ def build_evidence(directory: Path | None = None) -> dict[str, Any]:
                 _source(root / "real_models.md"),
             ],
         },
-        "suite_b": {
-            "models": suite_b_models,
-            "runs": sum(model["runs"] for model in suite_b_models),
-            "expectation_passed": sum(
-                model["expectation_passed"] for model in suite_b_models
-            ),
-            "expectation_total": sum(
-                model["expectation_total"] for model in suite_b_models
-            ),
-            "markdown": suite_b_markdown,
-            "sources": [
-                _source(root / "suite_b.csv"),
-                _source(root / "suite_b_fairlearn.csv"),
-                _source(root / "suite_b.md"),
-            ],
-        },
+        "suite_b": suite_b,
+        "suite_b_r51": suite_b_r51,
     }

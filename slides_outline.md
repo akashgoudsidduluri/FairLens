@@ -176,6 +176,12 @@ Artifact: the full report and Audit Record chain.
 | Model 2 mitigation at 2% budget | offset +80, gap 4.58%, Δaccuracy −1.30% |
 | Model 5 hotspot (seed 42) | 0.6320, ~6,320 per 10,000 |
 | Model 5 known miss | single gender 0.0265, kept |
+| Suite B planted models / clean control | 7 / 1 (Models 8–14 / 15) |
+| Suite B expectations met, protocol 1 → 2 | 18/40 → 24/40 |
+| Suite B kept per audit, protocol 1 → 2 | 3.1 → 0.9 (range 0–14 → 0–3) |
+| Suite B false alarms after Skeptic, protocol 1 → 2 | 125 → 38 |
+| Suite B planted treatment named | 5 of 7 (Models 8, 9, 10, 12, 13) |
+| Suite B clean control 15 | 0 kept, 0 false alarms, 5/5 met in both protocols |
 | Demo runtime | 67.9 s / 75.6 s for Models 2, 7, 5 |
 
 Use the exact values in `eval/results/summary.md` if they differ from this table;

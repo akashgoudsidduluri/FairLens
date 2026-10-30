@@ -129,6 +129,25 @@ before the first audit.
 - **No Anthropic key**: the template narrative is expected and passes the number
   check. Do not apologise for it; it is the deterministic fallback.
 
+## If a judge asks about the validation suite
+
+> Protocol 1 over-reported one effect as up to 11 findings. We added a
+> sibling-merge rule, pre-registered before its own re-run, and reported both
+> protocols side by side. Detection rose from 18 to 24 of 40, with zero new
+> false alarms on the clean controls.
+
+Then say the misses plainly:
+
+- The rule collapsed 8–10 findings into 1–3 per audit. It did not always reach
+  exactly one.
+- Model 11 keeps the wrong context in all five seeds. Model 14's explanation
+  path is unreachable. Models 9 and 10 sometimes keep two or three
+  distinguishable cells.
+- Model 15, the clean control, stayed at zero kept findings and zero false
+  alarms in both protocols.
+- It is a failure-to-reject refinement, not an equivalence test, and not a clean
+  first-pass result.
+
 ## Do not say
 
 - "The model is biased" — say "the model's decisions show disparate treatment
@@ -136,3 +155,9 @@ before the first audit.
 - "The Audit Record proves who approved it" — say "tamper-evident, not
   authorship."
 - "FairLens proves fairness" — say "a null result is not proof of fairness."
+- "Protocol 2 fixed it" — say "a pre-registered refinement; it reduced
+  over-reporting and still has disclosed misses."
+- "We detected all the planted bias" — say "we found the planted treatment in 5
+  of the 7 planted behaviours."
+- "Eight more models" — say "eight additional validation models (suite B,
+  including one clean control)."

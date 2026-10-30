@@ -1,49 +1,77 @@
-# FairLens India — five-minute demo script
+# FairLens India — demo script
 
 Audience: hackathon judges. Goal: show that the auditor is genuinely black-box,
 that it challenges itself, that a human is required, and that the Audit Record
 tamper check is real.
 
-## Before the room (2 minutes)
+**Default: 3-minute cut in the React Probe Arena.** If the organizers confirm
+5 minutes, add the two marked segments near the end. Use one UI for the live
+audit: React. Streamlit stays available as a fallback, not as a second stage.
+
+## Before the room (5 minutes)
+
+Start all services before you walk up. Three terminals, plus one optional:
 
 ```powershell
-.\run.ps1
-```
+# 1. black-box sandbox
+.\.venv\Scripts\python -m sandbox.serve --host 127.0.0.1 --port 8010
 
-Wait for `FairLens dashboard: http://127.0.0.1:8501`, then open it. Check the
-sandbox health badge by running an audit once if you have time. Reset the
-Audit Record database from the **Audit Records** tab so the chain starts clean.
-Close other browser tabs. Set the browser zoom to 100%.
-
-To show the protocol 1 / protocol 2 Evidence page, start the audit service and
-the web app in two more terminals:
-
-```powershell
+# 2. audit API (also serves the Evidence page data)
 .\.venv\Scripts\python -m api.serve
+
+# 3. React Probe Arena
 cd web; npm run dev
+
+# 4. real-data targets, only if a judge asks (not needed for the 3-minute cut)
+.\.venv\Scripts\python -m targets.real.serve
 ```
 
-Open <http://127.0.0.1:5173/evidence>. It reads the committed result files and
-does not run an audit. Leave the page loaded before you start speaking.
+Then:
 
-If the laptop is slow, use **Demo mode** instead of three separate audits: it
-runs Models 2 → 7 → 5 and leaves the last report open.
+- Open <http://127.0.0.1:5173> and leave it on the model library.
+- Open <http://127.0.0.1:5173/evidence> in tab 2.
+- Open a suite B recording (Model 9 or 12) in tab 3.
+- Reset the Audit Record database so certificate #0 is issued live:
 
-## 0:00 — The problem (30 s)
+```powershell
+.\.venv\Scripts\python -m trust.reset_demo_data
+```
+
+- Laptop on AC, sleep and notifications off, browser zoom 110–125%, other tabs
+  closed.
+- Put the backup video on the desktop, ready to play.
+- Check `http://127.0.0.1:8010/health`, `http://127.0.0.1:8020/targets`, and the
+  Evidence page once.
+
+**Streamlit fallback.** If React fails on stage, the sandbox and API are already
+running. Start only the UI:
+
+```powershell
+.\.venv\Scripts\python -m streamlit run ui/app.py --server.address 127.0.0.1 --server.port 8501
+```
+
+Do not start `run.ps1` while the standalone sandbox owns port 8010.
+
+## 0:00 — The problem (20 s)
 
 > A lender says "our model is fair, but we can't show you the model." A
 > conventional fairness audit needs the model, the training data, or the labels.
-> FairLens assumes none of that. It only gets an HTTP endpoint.
+> The audit itself never needs the model's data or labels — only an HTTP endpoint.
 
-Point at the hero stats: 7 models, 2,000 twins per attribute, α = 0.05 frozen
-before the first audit.
+Point at the model library: 15 validation models, 2 real datasets, α = 0.05
+frozen before the first audit.
 
-## 0:30 — Model 2: find and defend a finding (90 s)
+If a judge asks whether this works on a real lender:
 
-1. Keep **Model 2** and press **Start Audit**. Model 2 runs the lighter old
+> Any HTTP endpoint with authorization is supported and verified through the
+> sandbox and real-data targets. We are not claiming a real bank audit.
+
+## 0:20 — Model 2 live (60 s)
+
+1. Find **Model 2** and press **Start audit**. Model 2 runs the lighter old
    protocol (search off, about 30 s); the generalized suite B models are opened
    from the committed replays.
-2. While it runs, point at the pipeline and live log. Say:
+2. While it runs, point at the twin stream, agent lanes, and evidence meter. Say:
 
 > The planner fixes the scope. The prober sends two applicants who differ only
 > in gender — same income, credit, employment, pincode, age. The statistician
@@ -54,54 +82,60 @@ before the first audit.
 3. When the report lands, point at **6 kept / 2 rejected**. The gender finding is
    +65.3% net flip toward women. The pincode and name candidates are rejected as
    confounded: their observational gaps do not survive the twin test.
-4. Point at the **intersectional heatmap**: five female cells are kept.
-5. Point at the **impact counter**: ~7,200 people per 10,000 in the top
-   intersectional subgroup (female, 45+, urban), with the 95% range. Say the
-   formula out loud: `max(net flip, 0) × 10,000`, no hidden multiplier. The
-   single-attribute gender finding is ~6,535; the intersectional cell is larger.
-6. Move the **mitigation slider** to 2%. The recommended offset is +80: fairness
-   gap 4.58%, accuracy loss −1.30% (accuracy improved). Say:
+4. Point at **People per 10,000**: ~7,200 in the top intersectional subgroup
+   (female, 45+, urban), with the 95% range. Say the formula out loud:
+   `max(net flip, 0) × 10,000`, no hidden multiplier. The single-attribute
+   gender finding is ~6,535.
+5. Point at the **narrative** and `number check passed`, `source: template`. Say
+   the LLM only rewrites computed JSON; every number is checked, and a failed
+   draft falls back to the deterministic template.
 
-> Accuracy is measured against a hidden repayment label. This is an offline
-> what-if, not a deployable policy.
+## 1:20 — Model 7: a gap is not a finding (30 s)
 
-7. Scroll to the **narrative**. Point at `NUMBER CHECK PASSED` and `source:
-   template`. Say the LLM only rewrites computed JSON; every number is checked,
-   and a failed draft falls back to the deterministic template.
-
-## 2:00 — The human gate (45 s)
-
-1. Press **Approve & issue Audit Record** without a name. It refuses. Say:
-
-> No Audit Record without a named human. The auditor does not sign for you.
-
-2. Type `Dr A. Rao`, press **Approve & issue Audit Record**.
-3. Open the **Audit Records** tab. Show the chain: genesis, record #0, approver,
-   decision, UTC timestamp, `record_hash`, `prev_hash`. Press **Verify chain**.
-4. Tick the confirmation and press **Demo: tamper with the newest record**, then
-   **Verify chain**. Show `CHAIN BROKEN`, the red record, and `HASH MISMATCH`.
-
-> This proves tamper-evidence, not authorship. Anyone who can rewrite every row
-> can recompute the chain. Signing is future work — and the UI says so. An Audit
-> Record documents what was measured; it is not a certification of fairness,
-> lawfulness, or compliance.
-
-## 2:45 — Model 7: a gap is not a finding (45 s)
-
-1. Back to **Audit**. Choose **Model 7**, **Start Audit** (or open the demo
-   result).
+1. Keep the Model 2 report in its tab. Open the **Model 7** recording from
+   **Watch a recorded audit** and press **Skip to report**. It is a committed
+   replay; no sandbox call is made.
 2. Female, P2, and N2 approval rates look worse. Say:
 
 > A dashboard would flag this. Model 7 approves on income only. The generator
 > gives those groups lower income, so the gap is explained by a legitimate
 > factor. The twins never flip, and the Skeptic rejects every candidate.
 
-3. Point at the rejected cards and the empty impact state. No per-10,000 claim is
-   invented.
+3. Point at the rejected badges and the empty impact state. No per-10,000 claim
+   is invented.
 
-## 3:30 — Model 5: where harm hides (45 s)
+## 1:50 — Human gate + tamper (30 s)
 
-1. Choose **Model 5**, **Start Audit** (or open the demo result).
+1. Return to the Model 2 report. Press **Approve & issue Audit Record** with the
+   approver field empty. It refuses. Say:
+
+> No Audit Record without a named human. The auditor does not sign for you.
+
+2. Type `Dr A. Rao`, press **Approve & issue Audit Record**.
+3. Click **audit records**. Press **Verify chain**. Tick the confirmation, press
+   **Tamper with newest record**, then **Verify chain**. Show `CHAIN BROKEN` and
+   the first broken record.
+
+> This proves tamper-evidence, not authorship. Anyone who can rewrite every row
+> can recompute the chain. Signing is future work — and the UI says so. An Audit
+> Record documents what was measured; it is not a certification of fairness,
+> lawfulness, or compliance.
+
+## 2:20 — Close (20 s)
+
+> FairLens is not a fairness score. It is an audit trail: twin evidence, a
+> Skeptic that tries to falsify it, human impact, a human decision, and a
+> tamper-evident record. The LLM never touches the numbers.
+
+That is 2:40, with 20 seconds of buffer.
+
+## 5-minute add-ons (only if the organizers confirm 5 minutes)
+
+Insert these before the close.
+
+### +45 s — Model 5: where harm hides
+
+1. Open the **Model 5** recording and press **Skip to report**.
 2. Show the single-attribute gender card: net 0.0265, kept because it is above
    the 0.02 materiality threshold. Say:
 
@@ -113,32 +147,42 @@ before the first audit.
    10,000. Say the intersectional scanner samples 500 pairs per cell so a rare
    2% subgroup still has power.
 
-## 4:15 — Evidence and close (45 s)
+### +45 s — Evidence: protocol 1 next to protocol 2
 
-1. Show `eval/results/summary.md`: 7 models × 5 seeds, 1% / 3% sensitivity,
-   false alarms before/after the Skeptic, every miss, Audit Record test, number
-   check pass rate.
-2. Show the Fairlearn comparison: Model 7 has a gender DP gap of 0.1501 and is
-   still not flagged, because the gap is confounded; Model 2's DP gap is 0.6605
-   and is flagged. Observational metrics alone cannot tell these apart.
-3. Close:
+1. Switch to the preloaded **/evidence** tab.
+2. Point at **P1 18/40 met → P2 24/40 met**, **3.1 → 0.9** kept findings per
+   audit, and **125 → 38** false alarms after the Skeptic.
+3. Say:
 
-> FairLens is not a fairness score. It is an audit trail: twin evidence, a
-> Skeptic that tries to falsify it, human impact, a human decision, and a
-> tamper-evident record. The LLM never touches the numbers.
+> Protocol 1 over-reported one effect as up to 11 findings. We added a
+> sibling-merge rule, pre-registered before its own re-run, and reported both
+> protocols side by side. Detection rose from 18 to 24 of 40, with zero new
+> false alarms on the clean controls.
+
+4. Then say the misses plainly:
+
+> The rule collapsed 8–10 findings into 1–3 per audit. It did not always reach
+> exactly one. Model 11 keeps the wrong context in all five seeds. Model 14's
+> explanation path is unreachable. Models 9 and 10 sometimes keep two or three
+> distinguishable cells. The clean control stayed at zero.
 
 ## If something breaks
 
-- **Audit cannot run**: check the sandbox is on `http://127.0.0.1:8010/health`.
-  The UI shows a clean error and does not crash.
-- **Port 8010 busy**: `$env:FAIRLENS_API_PORT=8020; $env:FAIRLENS_UI_PORT=8502;
-  .\run.ps1`.
-- **Audit is slow**: use **Demo mode**; the recorded headless runs took 67.9s
-  and 75.6s for all three models, and each audit is under the 60s budget.
-- **Audit Records tab is red before the demo**: press **Reset demo Audit Record
-  database**. The database is local and disposable.
+- **React cannot reach the API**: check `http://127.0.0.1:8020/targets`. If it
+  is down, restart `python -m api.serve`; if it stays down, use the Streamlit
+  fallback.
+- **Audit cannot run**: check the sandbox is on
+  `http://127.0.0.1:8010/health`. The UI shows a clean error and does not crash.
+- **Port 8010 busy**: stop the process holding 8010 and restart the sandbox.
+  Do not move it to 8020; the audit API uses that port.
+- **Audit is slow**: open a committed recording instead. Model 2 on the old
+  protocol is about 30 s; a generalized suite B audit is about 78 s.
+- **Audit Records tab is red before the demo**: run
+  `python -m trust.reset_demo_data`. The database is local and disposable.
 - **No Anthropic key**: the template narrative is expected and passes the number
   check. Do not apologise for it; it is the deterministic fallback.
+- **Mitigation slider**: the live React report does not include it. Show it in
+  the backup video or the Streamlit fallback only if a judge asks.
 
 ## If a judge asks about the validation suite
 
@@ -172,3 +216,7 @@ Then say the misses plainly:
   of the 7 planted behaviours."
 - "Eight more models" — say "eight additional validation models (suite B,
   including one clean control)."
+- "We audited a real bank" — say "the adapter path is verified through the
+  sandbox and two public UCI datasets."
+- "The audit needs the model's data or labels" — say "the audit itself never
+  needs the model's data or labels."

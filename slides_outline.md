@@ -1,8 +1,13 @@
-# FairLens India — five-minute talk
+# FairLens India — demo talk
 
 Ten slides. Each slide has the one sentence to say and the artifact on screen.
 The demo script is in [demo_script.md](demo_script.md); this outline is for the
 spoken argument around it.
+
+**Default stage cut: 3 minutes.** Use Slides 1, 3, 5, 8, and 10; hold Slides 2,
+4, 6, 7, and 9 as backup. If the organizers confirm 5 minutes, use all ten.
+The live audit runs in the React Probe Arena at <http://127.0.0.1:5173>;
+Streamlit at 8501 is only the fallback.
 
 ---
 
@@ -161,6 +166,20 @@ Artifact: the full report and Audit Record chain.
 
 ---
 
+## Backup slide — validation suite B
+
+Artifact: the Evidence page, protocol 1 next to protocol 2.
+
+- Expectations met: **18/40 → 24/40**
+- Kept findings per audit: **3.1 → 0.9**
+- False alarms after the Skeptic: **125 → 38**
+- Clean control 15: **0 kept, 0 false alarms** in both protocols
+
+> Protocol 2 is a pre-registered refinement, not a clean first pass. It
+> collapsed 8–10 findings to 1–3, but did not always reach one.
+
+---
+
 ## Numbers to have ready
 
 | Claim | Value |
@@ -182,7 +201,10 @@ Artifact: the full report and Audit Record chain.
 | Suite B false alarms after Skeptic, protocol 1 → 2 | 125 → 38 |
 | Suite B planted treatment named | 5 of 7 (Models 8, 9, 10, 12, 13) |
 | Suite B clean control 15 | 0 kept, 0 false alarms, 5/5 met in both protocols |
-| Demo runtime | 67.9 s / 75.6 s for Models 2, 7, 5 |
+| Live UI | React Probe Arena at 5173; Streamlit 8501 only as fallback |
+| Demo slot | 3-minute cut by default; confirm with organizers |
+| Real endpoints | adapter path verified through sandbox + two public UCI targets; not a real bank audit |
+| Headless three-audit run (fallback evidence) | 67.9 s / 75.6 s for Models 2, 7, 5 |
 
 Use the exact values in `eval/results/summary.md` if they differ from this table;
 the summary is generated from the final run.

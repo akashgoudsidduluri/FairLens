@@ -15,6 +15,17 @@ sandbox health badge by running an audit once if you have time. Reset the
 Audit Record database from the **Audit Records** tab so the chain starts clean.
 Close other browser tabs. Set the browser zoom to 100%.
 
+To show the protocol 1 / protocol 2 Evidence page, start the audit service and
+the web app in two more terminals:
+
+```powershell
+.\.venv\Scripts\python -m api.serve
+cd web; npm run dev
+```
+
+Open <http://127.0.0.1:5173/evidence>. It reads the committed result files and
+does not run an audit. Leave the page loaded before you start speaking.
+
 If the laptop is slow, use **Demo mode** instead of three separate audits: it
 runs Models 2 → 7 → 5 and leaves the last report open.
 

@@ -29,7 +29,9 @@ before the first audit.
 
 ## 0:30 — Model 2: find and defend a finding (90 s)
 
-1. Keep **Model 2** and press **Start Audit**.
+1. Keep **Model 2** and press **Start Audit**. Model 2 runs the lighter old
+   protocol (search off, about 30 s); the generalized suite B models are opened
+   from the committed replays.
 2. While it runs, point at the pipeline and live log. Say:
 
 > The planner fixes the scope. The prober sends two applicants who differ only

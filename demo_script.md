@@ -40,6 +40,8 @@ Then:
 - Laptop on AC, sleep and notifications off, browser zoom 110–125%, other tabs
   closed.
 - Put the backup video on the desktop, ready to play.
+- Run one throwaway **Model 2** audit 5–10 minutes before the slot to warm the
+  sandbox, then reset the Audit Record store and confirm 0 records.
 - Check `http://127.0.0.1:8010/health`, `http://127.0.0.1:8020/targets`, and the
   Evidence page once.
 
@@ -70,9 +72,10 @@ If a judge asks whether this works on a real lender:
 
 ## 0:20 — Model 2 live (60 s)
 
-1. The audit has been running since 0:00. It lands around **0:50** on this laptop
-   (about 50 s measured). Model 2 uses the direct sandbox path, search off; the
-   generalized suite B models are opened from the committed replays.
+1. The audit has been running since 0:00. It lands around **0:50** on this laptop:
+   button-press runs measured **47.4 s** and **51.7 s**; the cold run was 41.1 s.
+   Model 2 uses the direct sandbox path, search off; the generalized suite B
+   models are opened from the committed replays.
 2. While it runs, point at the twin stream, agent lanes, and evidence meter. Say:
 
 > The planner fixes the scope. The prober sends two applicants who differ only
@@ -91,6 +94,10 @@ If a judge asks whether this works on a real lender:
 5. Point at the **narrative** and `number check passed`, `source: template`. Say
    the LLM only rewrites computed JSON; every number is checked, and a failed
    draft falls back to the deterministic template.
+
+Cut-off: if the report has not appeared by **1:05**, say "while this finishes,
+here is the same audit from a recording" and open the **Model 2** recording from
+**Watch a recorded audit**. Never stare at a spinner.
 
 ## 1:20 — Model 7: a gap is not a finding (30 s)
 

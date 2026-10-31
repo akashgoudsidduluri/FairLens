@@ -10,7 +10,12 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import type { ReplaySummary, TargetCard, TargetCatalog } from "@/api-types";
+import type {
+  AuditCreateRequest,
+  ReplaySummary,
+  TargetCard,
+  TargetCatalog,
+} from "@/api-types";
 import { Logo } from "@/components/Logo";
 import { ConnectEndpoint } from "@/components/library/ConnectEndpoint";
 import { ModelCard } from "@/components/library/ModelCard";
@@ -52,12 +57,18 @@ export function Landing() {
     setStartingId(card.id);
     setStartError(null);
     try {
-      const created = await api.startAudit({
+      // Suite A sandbox models use the direct v1 path: the target adapter
+      // scores batches sequentially, which roughly doubles the live runtime.
+      // Suite B and real targets keep their adapter (caps, rate limits, mapping).
+      const body: AuditCreateRequest = {
         model_id: card.model_id,
-        target: card.target,
         include_mitigation: false,
         include_narrative: true,
-      });
+      };
+      if (card.kind !== "validation" || (card.model_id ?? 0) >= 8) {
+        body.target = card.target;
+      }
+      const created = await api.startAudit(body);
       navigate(`/audit/${created.id}`);
     } catch (cause) {
       setStartError(

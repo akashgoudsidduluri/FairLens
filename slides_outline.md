@@ -204,6 +204,7 @@ Artifact: the Evidence page, protocol 1 next to protocol 2.
 | Live UI | React Probe Arena at 5173; Streamlit 8501 only as fallback |
 | Demo slot | 3-minute cut by default; confirm with organizers |
 | Real endpoints | adapter path verified through sandbox + two public UCI targets; not a real bank audit |
+| Model 2 live (React, direct sandbox path) | ~50 s measured; start before the problem line |
 | Headless three-audit run (fallback evidence) | 67.9 s / 75.6 s for Models 2, 7, 5 |
 
 Use the exact values in `eval/results/summary.md` if they differ from this table;

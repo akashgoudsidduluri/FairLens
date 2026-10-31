@@ -52,7 +52,9 @@ running. Start only the UI:
 
 Do not start `run.ps1` while the standalone sandbox owns port 8010.
 
-## 0:00 — The problem (20 s)
+## 0:00 — Start Model 2, then the problem (20 s)
+
+Press **Start audit** on **Model 2** first, then say:
 
 > A lender says "our model is fair, but we can't show you the model." A
 > conventional fairness audit needs the model, the training data, or the labels.
@@ -68,9 +70,9 @@ If a judge asks whether this works on a real lender:
 
 ## 0:20 — Model 2 live (60 s)
 
-1. Find **Model 2** and press **Start audit**. Model 2 runs the lighter old
-   protocol (search off, about 30 s); the generalized suite B models are opened
-   from the committed replays.
+1. The audit has been running since 0:00. It lands around **0:50** on this laptop
+   (about 50 s measured). Model 2 uses the direct sandbox path, search off; the
+   generalized suite B models are opened from the committed replays.
 2. While it runs, point at the twin stream, agent lanes, and evidence meter. Say:
 
 > The planner fixes the scope. The prober sends two applicants who differ only
@@ -175,14 +177,16 @@ Insert these before the close.
   `http://127.0.0.1:8010/health`. The UI shows a clean error and does not crash.
 - **Port 8010 busy**: stop the process holding 8010 and restart the sandbox.
   Do not move it to 8020; the audit API uses that port.
-- **Audit is slow**: open a committed recording instead. Model 2 on the old
-  protocol is about 30 s; a generalized suite B audit is about 78 s.
+- **Audit is slow**: open a committed recording instead. Model 2 on the direct
+  path measured about 50 s on the demo laptop; a generalized suite B audit is
+  about 78 s. Start Model 2 before the problem line.
 - **Audit Records tab is red before the demo**: run
   `python -m trust.reset_demo_data`. The database is local and disposable.
 - **No Anthropic key**: the template narrative is expected and passes the number
   check. Do not apologise for it; it is the deterministic fallback.
 - **Mitigation slider**: the live React report does not include it. Show it in
-  the backup video or the Streamlit fallback only if a judge asks.
+  the backup video or the Streamlit fallback only if a judge asks, and say "the
+  mitigation curve is in the fallback UI and the video."
 
 ## If a judge asks about the validation suite
 

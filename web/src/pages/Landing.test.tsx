@@ -100,13 +100,36 @@ describe("Landing Model Library", () => {
     );
     expect(startAudit).toHaveBeenCalledWith({
       model_id: 1,
-      target: "sandbox:1",
       include_mitigation: false,
       include_narrative: true,
     });
     await waitFor(() =>
       expect(screen.getByText(/arena/)).toBeInTheDocument(),
     );
+  });
+
+  it("keeps the target adapter for suite B audits", async () => {
+    const user = userEvent.setup();
+    getTargets.mockResolvedValue(makeCatalog());
+    startAudit.mockResolvedValue({
+      id: "run8",
+      events_url: "/audits/run8/events",
+      result_url: "/audits/run8",
+    });
+    renderLanding();
+    await screen.findByText("Validation model 8");
+
+    const buttons = within(
+      document.getElementById("model-library") as HTMLElement,
+    ).getAllByRole("button", { name: /start audit/i });
+    await user.click(buttons[7]);
+
+    expect(startAudit).toHaveBeenCalledWith({
+      model_id: 8,
+      target: "sandbox:8",
+      include_mitigation: false,
+      include_narrative: true,
+    });
   });
 
   it("links to committed recordings without starting an audit", async () => {
